@@ -25,6 +25,61 @@ npm run install-browsers
 
 ## Usage
 
+### Interactive CLI
+
+```bash
+npm start
+# or
+npm run cli
+```
+
+This will start an interactive session where you can enter URLs and choose options.
+
+### Command Line Interface
+
+```bash
+# Basic scraping
+npm run scrape https://example.com
+
+# Structured content extraction
+npm run scrape -- --structured https://example.com
+
+# Save to file
+npm run scrape -- --structured --output results.json https://example.com
+
+# Use different browser
+npm run scrape -- --browser firefox https://example.com
+```
+
+### Bulk Scraping
+
+```bash
+# Scrape multiple URLs
+npm run bulk -- urls https://example.com https://google.com
+
+# Scrape URLs from file
+npm run bulk -- file sample-urls.txt --structured --output results.json
+
+# With custom options
+npm run bulk -- file urls.txt --batch-size 3 --delay 2000 --format csv
+```
+
+### Preset-based Scraping
+
+```bash
+# List available presets
+npm run config list-presets
+
+# Use a preset for specific site types
+npm run config -- scrape https://news-site.com news
+
+# Show preset configuration
+npm run config show-preset blog
+
+# Save results with custom options
+npm run config -- scrape https://docs.site.com documentation --output docs.json
+```
+
 ### Basic Usage
 
 ```bash

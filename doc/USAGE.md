@@ -17,21 +17,61 @@ await scraper.close();
 
 ```bash
 npm start
+# or
+npm run cli
 # Enter URL when prompted
 # Choose between basic or structured extraction
 ```
 
-### 3. Bulk Scraping
+### 3. Command Line Interface
+
+```bash
+# Basic scraping
+npm run scrape https://example.com
+
+# Structured content extraction  
+npm run scrape -- --structured https://example.com
+
+# Save to file
+npm run scrape -- --structured --output results.json https://example.com
+
+# Use different browser
+npm run scrape -- --browser firefox https://example.com
+
+# Run with browser window visible (for debugging)
+npm run scrape -- --no-headless https://example.com
+```
+
+### 4. Bulk Scraping
 
 ```bash
 # Scrape multiple URLs
-node src/bulk-scraper.js urls https://example.com https://google.com
+npm run bulk -- urls https://example.com https://google.com
 
 # Scrape URLs from file
-node src/bulk-scraper.js file sample-urls.txt --output results.json
+npm run bulk -- file sample-urls.txt --structured --output results.json
 
-# With structured content extraction
-node src/bulk-scraper.js file sample-urls.txt --structured --format csv
+# With custom configuration
+npm run bulk -- file urls.txt --batch-size 3 --delay 2000 --format csv --browser firefox
+```
+
+### 5. Preset-based Configuration
+
+```bash
+# List available presets
+npm run config list-presets
+
+# Show specific preset configuration
+npm run config show-preset news
+
+# Use preset for scraping
+npm run config -- scrape https://news-site.com news
+
+# Use preset with custom options
+npm run config -- scrape https://blog.example.com blog --format full --output blog-content.json
+
+# Use preset with browser options
+npm run config -- scrape https://docs.site.com documentation --browser firefox --no-headless
 ```
 
 ## Configuration Options

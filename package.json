@@ -2,10 +2,14 @@
   "name": "webscrapper",
   "version": "1.0.0",
   "description": "A web scraper using Playwright to extract all text content from websites",
-  "main": "src/scraper.js",
+  "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/scraper.js",
+    "start": "node src/cli.js",
+    "cli": "node src/cli.js",
+    "scrape": "node src/scrape.js",
+    "bulk": "node src/bulk-cli.js",
+    "config": "node src/config-cli.js",
     "install-browsers": "npx playwright install",
     "test": "node src/test.js"
   },

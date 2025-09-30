@@ -1,6 +1,5 @@
 import { WebScraper } from './scraper.js';
 import { writeFileSync } from 'fs';
-import { join } from 'path';
 
 export class BulkScraper {
   constructor(options = {}) {
@@ -126,95 +125,5 @@ export class BulkScraper {
 
   async close() {
     await this.scraper.close();
-  }
-}
-
-// CLI interface for bulk scraping
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  
-  if (args.length === 0) {
-    console.log(`
-Usage: node src/bulk-scraper.js <mode> [options]
-
-Modes:
-  urls <url1> <url2> ...     - Scrape specific URLs
-  file <path>               - Scrape URLs from file (one per line)
-
-Options:
-  --structured              - Extract structured content
-  --output <filename>       - Save results to file
-  --format <json|txt|csv>   - Output format (default: json)
-  --batch-size <number>     - URLs per batch (default: 5)
-  --delay <ms>              - Delay between batches (default: 1000)
-
-Examples:
-  node src/bulk-scraper.js urls https://example.com https://google.com
-  node src/bulk-scraper.js file urls.txt --output results.json --structured
-`);
-    process.exit(1);
-  }
-
-  const mode = args[0];
-  let urls = [];
-  let options = {
-    structured: args.includes('--structured'),
-    outputFormat: 'json',
-    batchSize: 5,
-    delay: 1000
-  };
-
-  // Parse arguments
-  for (let i = 1; i < args.length; i++) {
-    switch (args[i]) {
-      case '--output':
-        options.outputFile = args[++i];
-        break;
-      case '--format':
-        options.outputFormat = args[++i];
-        break;
-      case '--batch-size':
-        options.batchSize = parseInt(args[++i]);
-        break;
-      case '--delay':
-        options.delay = parseInt(args[++i]);
-        break;
-      case '--structured':
-        // Already handled above
-        break;
-      default:
-        if (mode === 'urls' && !args[i].startsWith('--')) {
-          urls.push(args[i]);
-        }
-    }
-  }
-
-  try {
-    const bulkScraper = new BulkScraper({ headless: true });
-    
-    let results;
-    if (mode === 'file') {
-      const filePath = args[1];
-      results = await bulkScraper.scrapeUrlsFromFile(filePath);
-    } else if (mode === 'urls') {
-      results = await bulkScraper.scrapeUrls(urls, options);
-    } else {
-      throw new Error(`Unknown mode: ${mode}`);
-    }
-    
-    console.log(`\n✅ Completed scraping ${results.length} URLs`);
-    console.log(`📊 Success rate: ${((results.filter(r => !r.error).length / results.length) * 100).toFixed(1)}%`);
-    
-    if (!options.outputFile) {
-      console.log('\n📋 Results summary:');
-      results.forEach((result, index) => {
-        console.log(`${index + 1}. ${result.url} - ${result.error ? '❌ Error' : '✅ Success'}`);
-      });
-    }
-    
-    await bulkScraper.close();
-  } catch (error) {
-    console.error('❌ Bulk scraping failed:', error.message);
-    process.exit(1);
   }
 }

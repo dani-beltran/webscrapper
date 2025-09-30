@@ -1,0 +1,21 @@
+{
+  "url": "https://example.com",
+  "title": "Example Domain",
+  "headings": {
+    "h1": [
+      "Example Domain"
+    ]
+  },
+  "paragraphs": [
+    "This domain is for use in illustrative examples in documents. You may use this\n    domain in literature without prior coordination or asking for permission.",
+    "More information..."
+  ],
+  "links": [
+    {
+      "text": "More information...",
+      "href": "https://www.iana.org/domains/example"
+    }
+  ],
+  "lists": [],
+  "timestamp": "2025-09-30T08:21:17.717Z"
+}

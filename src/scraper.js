@@ -215,35 +215,3 @@ export class WebScraper {
     }
   }
 }
-
-
-// CLI interface when run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const readline = await import('readline');
-  
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  
-  rl.question('Enter the URL to scrape: ', async (url) => {
-    rl.question('Extract structured content? (y/n): ', async (structured) => {
-      try {
-        const scraper = new WebScraper();
-        
-        const result = structured.toLowerCase() === 'y' 
-          ? await scraper.scrapeTextStructured(url)
-          : await scraper.scrapeText(url);
-        
-        console.log('\n--- SCRAPING RESULTS ---');
-        console.log(JSON.stringify(result, null, 2));
-        
-        await scraper.close();
-      } catch (error) {
-        console.error('Scraping failed:', error.message);
-      } finally {
-        rl.close();
-      }
-    });
-  });
-}
