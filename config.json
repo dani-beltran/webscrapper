@@ -1,0 +1,63 @@
+{
+  "defaultOptions": {
+    "browser": "chromium",
+    "headless": true,
+    "timeout": 30000,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "excludeSelectors": [
+      "script",
+      "style",
+      "nav",
+      "footer",
+      "aside",
+      "header",
+      ".ads",
+      ".advertisement",
+      ".sidebar",
+      ".comments",
+      "#comments",
+      ".social-share",
+      ".cookie-notice"
+    ]
+  },
+  "bulkScraping": {
+    "batchSize": 5,
+    "delayBetweenBatches": 1000,
+    "maxRetries": 3,
+    "outputDir": "./output"
+  },
+  "presets": {
+    "news": {
+      "excludeSelectors": [
+        "script", "style", "nav", "footer", "aside", "header",
+        ".ads", ".advertisement", ".sidebar", ".comments", "#comments",
+        ".social-share", ".cookie-notice", ".related-articles", ".newsletter"
+      ],
+      "waitForSelector": "article, .article-content, .post-content"
+    },
+    "ecommerce": {
+      "excludeSelectors": [
+        "script", "style", "nav", "footer", "aside", "header",
+        ".ads", ".advertisement", ".reviews", ".recommendations",
+        ".cart", ".checkout", ".price-comparison"
+      ],
+      "waitForSelector": ".product-description, .product-info"
+    },
+    "blog": {
+      "excludeSelectors": [
+        "script", "style", "nav", "footer", "aside", "header",
+        ".ads", ".advertisement", ".sidebar", ".comments", "#comments",
+        ".social-share", ".author-bio", ".related-posts"
+      ],
+      "waitForSelector": ".post-content, .entry-content, article"
+    },
+    "documentation": {
+      "excludeSelectors": [
+        "script", "style", "nav", "footer", "aside", "header",
+        ".ads", ".advertisement", ".sidebar", ".edit-page",
+        ".page-nav", ".breadcrumbs"
+      ],
+      "waitForSelector": ".content, .documentation, .docs-content"
+    }
+  }
+}
