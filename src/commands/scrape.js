@@ -21,6 +21,7 @@ Options:
   --file <path>             - Read URLs from file (triggers bulk mode)
   --help, -h                - Show this help message
   --preset <name>           - Use configuration preset (triggers config mode)
+  --group-by <selector>     - CSS selector to group structured results by sections
   
 
 Bulk Mode Options (when multiple URLs or --file used):
@@ -32,6 +33,7 @@ Examples:
   # Single URL scraping
   node src/scrape.js "https://example.com"
   node src/scrape.js --structured "https://news-site.com"
+  node src/scrape.js --group-by "article" "https://news-site.com"
   
   # Bulk scraping
   node src/scrape.js "https://example.com" "https://google.com"
@@ -133,7 +135,8 @@ async function handleSingleMode(args) {
     headless: true,
     timeout: 30000,
     structured: false,
-    outputFile: null
+    outputFile: null,
+    groupBy: null
   };
 
   // Parse arguments
@@ -156,6 +159,10 @@ async function handleSingleMode(args) {
         break;
       case '--output':
         options.outputFile = args[++i];
+        break;
+      case '--group-by':
+        options.groupBy = args[++i];
+        options.structured = true; // Auto-enable structured mode when grouping
         break;
       case '--preset':
         // Skip preset handling in single mode - this should be handled by mode detection
@@ -185,6 +192,9 @@ async function handleSingleMode(args) {
 
   console.log(`🚀 Scraping: ${url}`);
   console.log(`🔧 Browser: ${options.browser}, Headless: ${options.headless}, Structured: ${options.structured}`);
+  if (options.groupBy) {
+    console.log(`📦 Grouping by selector: ${options.groupBy}`);
+  }
   
   const scraper = new WebScraper({
     browser: options.browser,
@@ -193,7 +203,7 @@ async function handleSingleMode(args) {
   });
 
   const result = options.structured 
-    ? await scraper.scrapeTextStructured(url)
+    ? await scraper.scrapeTextStructured(url, { sectionSelector: options.groupBy })
     : await scraper.scrapeText(url);
 
   await scraper.close();
@@ -202,10 +212,23 @@ async function handleSingleMode(args) {
   console.log('\n📊 Results:');
   if (options.structured) {
     console.log(`📄 Title: ${result.title || 'N/A'}`);
-    console.log(`📝 Paragraphs: ${result.paragraphs.length}`);
-    console.log(`🔗 Links: ${result.links.length}`);
-    console.log(`📑 Headings: ${Object.values(result.headings).flat().length}`);
-    console.log(`📋 Lists: ${result.lists.length}`);
+    
+    if (result.sections) {
+      console.log(`📦 Sections: ${result.sections.length}`);
+      result.sections.forEach((section, i) => {
+        console.log(`\n  Section ${i + 1} (${section.id}):`);
+        if (section.title) console.log(`    Title: ${section.title}`);
+        console.log(`    Paragraphs: ${section.paragraphs.length}`);
+        console.log(`    Links: ${section.links.length}`);
+        console.log(`    Headings: ${Object.values(section.headings).flat().length}`);
+        console.log(`    Lists: ${section.lists.length}`);
+      });
+    } else {
+      console.log(`📝 Paragraphs: ${result.paragraphs.length}`);
+      console.log(`🔗 Links: ${result.links.length}`);
+      console.log(`📑 Headings: ${Object.values(result.headings).flat().length}`);
+      console.log(`📋 Lists: ${result.lists.length}`);
+    }
   } else {
     console.log(`📝 Text length: ${result.length} characters`);
     console.log(`📄 Preview: ${result.text.substring(0, 150)}...`);
@@ -243,7 +266,8 @@ async function handleBulkMode(args) {
     outputFormat: 'json',
     batchSize: 5,
     delay: 1000,
-    outputFile: null
+    outputFile: null,
+    groupBy: null
   };
 
   // Parse arguments
@@ -269,6 +293,10 @@ async function handleBulkMode(args) {
         break;
       case '--structured':
         bulkOptions.structured = true;
+        break;
+      case '--group-by':
+        bulkOptions.groupBy = args[++i];
+        bulkOptions.structured = true; // Auto-enable structured mode when grouping
         break;
       case '--headless':
         scraperOptions.headless = true;
@@ -325,6 +353,9 @@ async function handleBulkMode(args) {
   console.log(`   Delay: ${bulkOptions.delay}ms`);
   console.log(`   Structured: ${bulkOptions.structured}`);
   console.log(`   Output format: ${bulkOptions.outputFormat}`);
+  if (bulkOptions.groupBy) {
+    console.log(`   Group by selector: ${bulkOptions.groupBy}`);
+  };
   
   const bulkScraper = new BulkScraper(scraperOptions);
   
@@ -413,7 +444,8 @@ async function handleConfigScrapeCommand(args) {
   let options = {
     outputFile: null,
     format: 'full', // Always use full format
-    customOptions: {}
+    customOptions: {},
+    groupBy: null
   };
 
   // Parse arguments
@@ -435,6 +467,9 @@ async function handleConfigScrapeCommand(args) {
         break;
       case '--no-headless':
         options.customOptions.headless = false;
+        break;
+      case '--group-by':
+        options.groupBy = args[++i];
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {
@@ -467,21 +502,38 @@ async function handleConfigScrapeCommand(args) {
   if (Object.keys(options.customOptions).length > 0) {
     console.log(`🔧 Custom options: ${JSON.stringify(options.customOptions)}`);
   }
+  if (options.groupBy) {
+    console.log(`📦 Grouping by selector: ${options.groupBy}`);
+  }
   
   const scraper = new ConfigurableScraper(preset, options.customOptions);
-  const result = await scraper.scrapeTextStructured(url);
+  const result = await scraper.scrapeTextStructured(url, { sectionSelector: options.groupBy });
   
   // Display results based on format
   switch (options.format) {
     case 'summary':
       console.log('\n📊 Results Summary:');
       console.log(`📄 Title: ${result.title || 'N/A'}`);
-      console.log(`📝 Text length: ${result.paragraphs.join(' ').length} characters`);
-      console.log(`📑 Headings: ${Object.values(result.headings).flat().length}`);
-      console.log(`🔗 Links: ${result.links.length}`);
-      console.log(`📋 Lists: ${result.lists.length}`);
       
-      if (result.headings.h1 && result.headings.h1.length > 0) {
+      if (result.sections) {
+        console.log(`� Sections: ${result.sections.length}`);
+        const totalParagraphs = result.sections.reduce((sum, s) => sum + s.paragraphs.length, 0);
+        const totalLinks = result.sections.reduce((sum, s) => sum + s.links.length, 0);
+        const totalHeadings = result.sections.reduce((sum, s) => sum + Object.values(s.headings).flat().length, 0);
+        const totalLists = result.sections.reduce((sum, s) => sum + s.lists.length, 0);
+        
+        console.log(`�📝 Total paragraphs: ${totalParagraphs}`);
+        console.log(`🔗 Total links: ${totalLinks}`);
+        console.log(`📑 Total headings: ${totalHeadings}`);
+        console.log(`📋 Total lists: ${totalLists}`);
+      } else {
+        console.log(`📝 Text length: ${result.paragraphs.join(' ').length} characters`);
+        console.log(`📑 Headings: ${Object.values(result.headings).flat().length}`);
+        console.log(`🔗 Links: ${result.links.length}`);
+        console.log(`📋 Lists: ${result.lists.length}`);
+      }
+      
+      if (result.headings?.h1 && result.headings.h1.length > 0) {
         console.log(`\n🏷️  Main headings:`);
         result.headings.h1.forEach(h => console.log(`   - ${h}`));
       }
@@ -491,27 +543,47 @@ async function handleConfigScrapeCommand(args) {
       console.log('\n📊 Detailed Results:');
       console.log(`📄 Title: ${result.title || 'N/A'}`);
       console.log(`🌐 URL: ${result.url}`);
-      console.log(`📝 Paragraphs (${result.paragraphs.length}):`);
-      result.paragraphs.slice(0, 3).forEach((p, i) => {
-        console.log(`   ${i + 1}. ${p.substring(0, 100)}${p.length > 100 ? '...' : ''}`);
-      });
-      if (result.paragraphs.length > 3) {
-        console.log(`   ... and ${result.paragraphs.length - 3} more`);
-      }
       
-      console.log(`\n📑 All headings:`);
-      Object.entries(result.headings).forEach(([tag, headings]) => {
-        if (headings.length > 0) {
-          console.log(`   ${tag.toUpperCase()}: ${headings.join(', ')}`);
+      if (result.sections) {
+        console.log(`\n📦 Sections (${result.sections.length}):`);
+        result.sections.forEach((section, i) => {
+          console.log(`\n  Section ${i + 1} (${section.id}):`);
+          if (section.title) {
+            console.log(`    Title: ${section.title}`);
+          }
+          console.log(`    Paragraphs: ${section.paragraphs.length}`);
+          console.log(`    Links: ${section.links.length}`);
+          console.log(`    Headings: ${Object.values(section.headings).flat().length}`);
+          console.log(`    Lists: ${section.lists.length}`);
+          
+          if (section.paragraphs.length > 0) {
+            console.log(`\n    First paragraph:`);
+            console.log(`    ${section.paragraphs[0].substring(0, 100)}...`);
+          }
+        });
+      } else {
+        console.log(`📝 Paragraphs (${result.paragraphs.length}):`);
+        result.paragraphs.slice(0, 3).forEach((p, i) => {
+          console.log(`   ${i + 1}. ${p.substring(0, 100)}${p.length > 100 ? '...' : ''}`);
+        });
+        if (result.paragraphs.length > 3) {
+          console.log(`   ... and ${result.paragraphs.length - 3} more`);
         }
-      });
-      
-      console.log(`\n🔗 Links (${result.links.length}):`);
-      result.links.slice(0, 5).forEach((link, i) => {
-        console.log(`   ${i + 1}. ${link.text} → ${link.href}`);
-      });
-      if (result.links.length > 5) {
-        console.log(`   ... and ${result.links.length - 5} more`);
+        
+        console.log(`\n📑 All headings:`);
+        Object.entries(result.headings).forEach(([tag, headings]) => {
+          if (headings.length > 0) {
+            console.log(`   ${tag.toUpperCase()}: ${headings.join(', ')}`);
+          }
+        });
+        
+        console.log(`\n🔗 Links (${result.links.length}):`);
+        result.links.slice(0, 5).forEach((link, i) => {
+          console.log(`   ${i + 1}. ${link.text} → ${link.href}`);
+        });
+        if (result.links.length > 5) {
+          console.log(`   ... and ${result.links.length - 5} more`);
+        }
       }
       break;
       

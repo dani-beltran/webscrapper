@@ -6,6 +6,7 @@ export class WebScraper {
       browser: options.browser || 'chromium',
       headless: options.headless !== false,
       timeout: options.timeout || 30000,
+      sectionSelector: options.sectionSelector || null,
       waitForSelector: options.waitForSelector || null,
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -102,7 +103,7 @@ export class WebScraper {
     }
   }
 
-  async scrapeTextStructured(url) {
+  async scrapeTextStructured(url, options = {}) {
     try {
       await this.init();
       
@@ -117,57 +118,102 @@ export class WebScraper {
         await page.waitForSelector(this.options.waitForSelector);
       }
       
+      const sectionSelector = options.sectionSelector || null;
+
       // Extract structured content
-      const structuredContent = await page.evaluate((excludeSelectors) => {
+      const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelector }) => {
         // Remove excluded elements
         excludeSelectors.forEach(selector => {
           const elements = document.querySelectorAll(selector);
           elements.forEach(el => el.remove());
         });
         
-        const result = {
-          title: document.title || '',
-          headings: {},
-          paragraphs: [],
-          links: [],
-          lists: []
+        // Helper function to extract structured data from an element
+        const extractFromElement = (element) => {
+          const data = {
+            headings: {},
+            paragraphs: [],
+            links: [],
+            lists: []
+          };
+          
+          // Extract headings
+          ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(tag => {
+            const headings = Array.from(element.querySelectorAll(tag))
+              .map(h => h.textContent.trim())
+              .filter(text => text.length > 0);
+            if (headings.length > 0) {
+              data.headings[tag] = headings;
+            }
+          });
+          
+          // Extract paragraphs
+          data.paragraphs = Array.from(element.querySelectorAll('p'))
+            .map(p => p.textContent.trim())
+            .filter(text => text.length > 0);
+          
+          // Extract links
+          data.links = Array.from(element.querySelectorAll('a[href]'))
+            .map(a => ({
+              text: a.textContent.trim(),
+              href: a.href
+            }))
+            .filter(link => link.text.length > 0);
+          
+          // Extract lists
+          data.lists = Array.from(element.querySelectorAll('ul, ol'))
+            .map(list => ({
+              type: list.tagName.toLowerCase(),
+              items: Array.from(list.querySelectorAll('li'))
+                .map(li => li.textContent.trim())
+                .filter(text => text.length > 0)
+            }))
+            .filter(list => list.items.length > 0);
+          
+          return data;
         };
         
-        // Extract headings
-        ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(tag => {
-          const headings = Array.from(document.querySelectorAll(tag))
-            .map(h => h.textContent.trim())
-            .filter(text => text.length > 0);
-          if (headings.length > 0) {
-            result.headings[tag] = headings;
+        const result = {
+          title: document.title || ''
+        };
+        
+        // If section selector is provided, group by sections
+        if (sectionSelector) {
+          const sections = Array.from(document.querySelectorAll(sectionSelector));
+          
+          if (sections.length > 0) {
+            result.sections = sections.map((section, index) => {
+              // Try to find a section identifier (id, class, or first heading)
+              let sectionId = section.id || section.className || `section-${index}`;
+              
+              // Try to get section title from first heading
+              const firstHeading = section.querySelector('h1, h2, h3, h4, h5, h6');
+              const sectionTitle = firstHeading ? firstHeading.textContent.trim() : null;
+              
+              return {
+                id: sectionId,
+                title: sectionTitle,
+                ...extractFromElement(section)
+              };
+            });
+          } else {
+            // No sections found, extract from body
+            result.sections = [{
+              id: 'body',
+              title: null,
+              ...extractFromElement(document.body)
+            }];
           }
-        });
-        
-        // Extract paragraphs
-        result.paragraphs = Array.from(document.querySelectorAll('p'))
-          .map(p => p.textContent.trim())
-          .filter(text => text.length > 0);
-        
-        // Extract links
-        result.links = Array.from(document.querySelectorAll('a[href]'))
-          .map(a => ({
-            text: a.textContent.trim(),
-            href: a.href
-          }))
-          .filter(link => link.text.length > 0);
-        
-        // Extract lists
-        result.lists = Array.from(document.querySelectorAll('ul, ol'))
-          .map(list => ({
-            type: list.tagName.toLowerCase(),
-            items: Array.from(list.querySelectorAll('li'))
-              .map(li => li.textContent.trim())
-              .filter(text => text.length > 0)
-          }))
-          .filter(list => list.items.length > 0);
+        } else {
+          // No section selector provided, extract from entire document
+          Object.assign(result, extractFromElement(document.body));
+        }
         
         return result;
-      }, this.options.excludeSelectors);
+      }, { 
+        excludeSelectors: this.options.excludeSelectors,
+        sectionSelector: sectionSelector
+      });
       
       await page.close();
       
@@ -183,13 +229,13 @@ export class WebScraper {
     }
   }
 
-  async scrapeMultiplePages(urls, structured = false) {
+  async scrapeMultiplePages(urls, structured = false, options = {}) {
     const results = [];
     
     for (const url of urls) {
       try {
         const result = structured 
-          ? await this.scrapeTextStructured(url)
+          ? await this.scrapeTextStructured(url, options)
           : await this.scrapeText(url);
         results.push(result);
         
