@@ -46,23 +46,23 @@ The web scraper automatically detects the operation mode based on your arguments
 
 ```bash
 # Basic scraping
-npm run scrape https://example.com
+npm run scrape "https://example.com"
 
 # Structured content extraction
-npm run scrape https://example.com --structured
+npm run scrape "https://example.com" --structured
 
 # Save to file
-npm run scrape https://example.com --structured --output results.json
+npm run scrape "https://example.com" --structured --output results.json
 
 # Use different browser
-npm run scrape https://example.com --browser firefox
+npm run scrape "https://example.com" --browser firefox
 ```
 
 ### Bulk Scraping
 
 ```bash
 # Multiple URLs (automatically detected as bulk mode)
-npm run scrape https://example.com https://google.com
+npm run scrape "https://example.com" "https://google.com"
 
 # URLs from file (triggered by --file flag)
 npm run scrape --file sample-urls.txt --structured --output results.json
@@ -75,7 +75,7 @@ npm run scrape --file urls.txt --batch-size 3 --delay 2000 --format csv
 
 ```bash
 # Using preset (triggered by --preset flag)  
-npm run scrape --preset news https://news-site.com
+npm run scrape --preset news "https://news-site.com"
 
 # List available presets
 npm run scrape list-presets
@@ -84,7 +84,7 @@ npm run scrape list-presets
 npm run scrape show-preset blog
 
 # Save results with custom options
-npm run scrape --preset documentation https://docs.site.com --output docs.json
+npm run scrape --preset documentation "https://docs.site.com" --output docs.json
 
 # Show information about presets
 npm run list-presets

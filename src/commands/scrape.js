@@ -30,15 +30,15 @@ Bulk Mode Options (when multiple URLs or --file used):
 
 Examples:
   # Single URL scraping
-  node src/scrape.js https://example.com
-  node src/scrape.js --structured https://news-site.com
+  node src/scrape.js "https://example.com"
+  node src/scrape.js --structured "https://news-site.com"
   
   # Bulk scraping
-  node src/scrape.js https://example.com https://google.com
+  node src/scrape.js "https://example.com" "https://google.com"
   node src/scrape.js --file urls.txt --output results.json --structured
   
   # Configuration-based scraping
-  node src/scrape.js --preset news https://news-site.com
+  node src/scrape.js --preset news "https://news-site.com"
 `);
 }
 
