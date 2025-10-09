@@ -5,11 +5,9 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/cli.js",
-    "cli": "node src/cli.js",
-    "scrape": "node src/scrape.js",
-    "bulk": "node src/bulk-cli.js",
-    "config": "node src/config-cli.js",
+    "scrape": "node src/commands/scrape.js",
+    "list-presets": "node src/commands/list-presets.js",
+    "show-preset": "node src/commands/show-preset.js",
     "install-browsers": "npx playwright install",
     "test": "node src/test.js"
   },
