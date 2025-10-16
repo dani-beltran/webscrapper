@@ -197,12 +197,8 @@ export class WebScraper {
               };
             });
           } else {
-            // No sections found, extract from body
-            result.sections = [{
-              id: 'body',
-              title: null,
-              ...extractFromElement(document.body)
-            }];
+            // No sections found, throw an error
+            throw new Error(`No sections found with selector: ${sectionSelector}`);
           }
         } else {
           // No section selector provided, extract from entire document
