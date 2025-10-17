@@ -164,14 +164,16 @@ export class WebScraper {
             }))
             .filter(list => list.items.length > 0);
           
-          // Extract all text nodes whose parent is not <p>
+          // Extract all text nodes whose parent is not <p>, <a>, <li> or <h>
+          const excludedTags = [ 'P', 'A', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6' ];
           const walker = document.createTreeWalker(
             element,
             NodeFilter.SHOW_TEXT,
             {
               acceptNode: function(node) {
-                // Skip if parent is a paragraph
-                if (node.parentElement && node.parentElement.tagName === 'P') {
+                // Skip if parent is a excluded tag
+                if (node.parentElement && 
+                  excludedTags.includes(node.parentElement.tagName)) {
                   return NodeFilter.FILTER_REJECT;
                 }
                 // Skip empty or whitespace-only text nodes
