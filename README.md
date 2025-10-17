@@ -27,7 +27,7 @@ npm run install-browsers
 npm run scrape "https://example.com"
 
 # Structured extraction
-npm run scrape "https://example.com" --structured --output results.json
+npm run scrape "https://example.com" -- --structured --output results.json
 
 # Run tests
 npm test
@@ -42,29 +42,29 @@ npm test
 npm run scrape "https://example.com"
 
 # Structured content (headings, links, paragraphs, lists)
-npm run scrape "https://example.com" --structured
+npm run scrape "https://example.com" -- --structured
 
 # Group content by sections
-npm run scrape "https://news-site.com" --structured --group-by "article"
+npm run scrape "https://news-site.com" -- --structured --group-by "article"
 
 # Use different browser
-npm run scrape "https://example.com" --browser firefox
+npm run scrape "https://example.com" -- --browser firefox
 
 # Debug mode (visible browser)
-npm run scrape "https://example.com" --no-headless
+npm run scrape "https://example.com" -- --no-headless
 ```
 
 ### Bulk Scraping
 
 ```bash
 # Multiple URLs
-npm run scrape "https://site1.com" "https://site2.com" --structured
+npm run scrape "https://site1.com" "https://site2.com" -- --structured
 
 # From file
-npm run scrape --file urls.txt --output results.json
+npm run scrape -- --file urls.txt --output results.json
 
 # Custom batch processing
-npm run scrape --file urls.txt --batch-size 3 --delay 2000 --format csv
+npm run scrape -- --file urls.txt --batch-size 3 --delay 2000 --format csv
 ```
 
 ### Preset-based Scraping
@@ -77,7 +77,7 @@ npm run list-presets
 npm run show-preset news
 
 # Use preset (news, blog, ecommerce, documentation)
-npm run scrape --preset news "https://news-site.com" --output articles.json
+npm run scrape -- --preset news "https://news-site.com" --output articles.json
 ```
 
 #### Available Presets
@@ -111,6 +111,18 @@ const customScraper = new WebScraper({
 // Structured extraction
 const structured = await scraper.scrapeTextStructured('https://example.com');
 console.log(structured.headings, structured.links);
+
+// Multiple section selectors - try multiple CSS selectors
+const sectionScraper = new WebScraper({
+  sectionSelectors: ['article', 'section', '.content', 'main']
+});
+const sections = await sectionScraper.scrapeTextStructured('https://example.com');
+console.log(sections.sections); // Array of matched sections
+
+// Override section selectors per request
+const result = await scraper.scrapeTextStructured('https://example.com', {
+  sectionSelectors: ['.post', 'article', '.entry']
+});
 ```
 
 ### Using Presets Programmatically
@@ -139,6 +151,32 @@ const results = await bulkScraper.scrapeUrls(urls, {
   outputFormat: 'json'
 });
 ```
+
+## 🎯 Advanced Features
+
+### Multiple Section Selectors
+
+You can now specify multiple CSS selectors to capture content from different section types. The scraper will try each selector and combine all matching sections.
+Each section in the results will include the selector as id, if there are several matches for the same selector, they will be numbered.
+
+```javascript
+const scraper = new WebScraper({
+  sectionSelectors: ['article', 'section', '.content', 'main']
+});
+
+const result = await scraper.scrapeTextStructured('https://example.com');
+// Returns sections matching ANY of the selectors
+```
+
+This is useful when:
+- Different pages use different HTML structures
+- You want to capture multiple types of content sections
+- Content is split across various semantic elements
+
+**Benefits:**
+- ✅ More flexible scraping across different page layouts
+- ✅ Fallback selectors if primary selector doesn't match
+- ✅ Combine multiple content areas (e.g., main article + sidebars)
 
 ## 📊 Output Formats
 

@@ -136,7 +136,7 @@ async function handleSingleMode(args) {
     timeout: 30000,
     structured: false,
     outputFile: null,
-    groupBy: null
+    groupBy: []
   };
 
   // Parse arguments
@@ -161,7 +161,7 @@ async function handleSingleMode(args) {
         options.outputFile = args[++i];
         break;
       case '--group-by':
-        options.groupBy = args[++i];
+        options.groupBy.push(args[++i]);
         options.structured = true; // Auto-enable structured mode when grouping
         break;
       case '--preset':
@@ -199,11 +199,12 @@ async function handleSingleMode(args) {
   const scraper = new WebScraper({
     browser: options.browser,
     headless: options.headless,
-    timeout: options.timeout
+    timeout: options.timeout,
+    sectionSelectors: options.groupBy ? [options.groupBy] : undefined
   });
 
   const result = options.structured 
-    ? await scraper.scrapeTextStructured(url, { sectionSelector: options.groupBy })
+    ? await scraper.scrapeTextStructured(url)
     : await scraper.scrapeText(url);
 
   await scraper.close();
@@ -469,7 +470,7 @@ async function handleConfigScrapeCommand(args) {
         options.customOptions.headless = false;
         break;
       case '--group-by':
-        options.groupBy = args[++i];
+        options.customOptions.sectionSelectors = [args[++i]];
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {
@@ -507,7 +508,7 @@ async function handleConfigScrapeCommand(args) {
   }
   
   const scraper = new ConfigurableScraper(preset, options.customOptions);
-  const result = await scraper.scrapeTextStructured(url, { sectionSelector: options.groupBy });
+  const result = await scraper.scrapeTextStructured(url);
   
   // Display results based on format
   switch (options.format) {

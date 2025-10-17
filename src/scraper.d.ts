@@ -2,7 +2,7 @@ export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   timeout?: number;
-  sectionSelector?: string | null;
+  sectionSelectors?: string[];
   waitForSelector?: string | null;
   excludeSelectors?: string[];
   userAgent?: string;
@@ -58,10 +58,6 @@ export interface ScrapeErrorResult {
   timestamp: string;
 }
 
-export interface ScrapeTextStructuredOptions {
-  sectionSelector?: string | null;
-}
-
 export declare class WebScraper {
   options: Required<WebScraperOptions>;
   browser: any | null;
@@ -73,12 +69,11 @@ export declare class WebScraper {
 
   scrapeText(url: string): Promise<ScrapeTextResult>;
 
-  scrapeTextStructured(url: string, options?: ScrapeTextStructuredOptions): Promise<ScrapeStructuredResult>;
+  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult>;
 
   scrapeMultiplePages(
     urls: string[],
     structured?: boolean,
-    options?: ScrapeTextStructuredOptions
   ): Promise<Array<ScrapeTextResult | ScrapeStructuredResult | ScrapeErrorResult>>;
 
   close(): Promise<void>;

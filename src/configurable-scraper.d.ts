@@ -1,4 +1,4 @@
-import { WebScraper, WebScraperOptions, ScrapeTextResult, ScrapeStructuredResult, ScrapeErrorResult, ScrapeTextStructuredOptions } from './scraper.js';
+import { WebScraper, WebScraperOptions, ScrapeTextResult, ScrapeStructuredResult, ScrapeErrorResult } from './scraper.js';
 
 export interface ScraperConfig {
   defaultOptions: WebScraperOptions;
@@ -18,12 +18,11 @@ export declare class ConfigurableScraper {
 
   scrapeText(url: string): Promise<ScrapeTextResult>;
 
-  scrapeTextStructured(url: string, options?: ScrapeTextStructuredOptions): Promise<ScrapeStructuredResult>;
+  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult>;
 
   scrapeMultiplePages(
     urls: string[],
     structured?: boolean,
-    options?: ScrapeTextStructuredOptions
   ): Promise<Array<ScrapeTextResult | ScrapeStructuredResult | ScrapeErrorResult>>;
 
   close(): Promise<void>;

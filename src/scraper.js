@@ -6,7 +6,7 @@ export class WebScraper {
       browser: options.browser || 'chromium',
       headless: options.headless !== false,
       timeout: options.timeout || 30000,
-      sectionSelector: options.sectionSelector || null,
+      sectionSelectors: options.sectionSelectors || [],
       waitForSelector: options.waitForSelector || null,
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -117,11 +117,10 @@ export class WebScraper {
       if (this.options.waitForSelector) {
         await page.waitForSelector(this.options.waitForSelector);
       }
-      
-      const sectionSelector = options.sectionSelector || null;
 
       // Extract structured content
-      const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelector }) => {
+      const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelectors }) => {
+        console.log('Extracting structured content...', sectionSelectors);
         // Remove excluded elements
         excludeSelectors.forEach(selector => {
           const elements = document.querySelectorAll(selector);
@@ -177,12 +176,23 @@ export class WebScraper {
           title: document.title || ''
         };
         
-        // If section selector is provided, group by sections
-        if (sectionSelector) {
-          const sections = Array.from(document.querySelectorAll(sectionSelector));
+        // If section selectors are provided, group by sections
+        if (sectionSelectors && sectionSelectors.length > 0) {
+          const allSections = [];
           
-          if (sections.length > 0) {
-            result.sections = sections.map((section, index) => {
+          // Try each selector and collect matching sections
+          sectionSelectors.forEach(selector => {
+            const sections = Array.from(document.querySelectorAll(selector));
+            sections.forEach(section => {
+              // Avoid duplicates if sections match multiple selectors
+              if (!allSections.includes(section)) {
+                allSections.push(section);
+              }
+            });
+          });
+          
+          if (allSections.length > 0) {
+            result.sections = allSections.map((section, index) => {
               // Try to find a section identifier (id, class, or first heading)
               let sectionId = section.id || section.className || `section-${index}`;
               
@@ -197,18 +207,18 @@ export class WebScraper {
               };
             });
           } else {
-            // No sections found, throw an error
-            throw new Error(`No sections found with selector: ${sectionSelector}`);
+            // No sections found with any of the selectors
+            throw new Error(`No sections found with selectors: ${sectionSelectors.join(', ')}`);
           }
         } else {
-          // No section selector provided, extract from entire document
+          // No section selectors provided, extract from entire document
           Object.assign(result, extractFromElement(document.body));
         }
         
         return result;
       }, { 
         excludeSelectors: this.options.excludeSelectors,
-        sectionSelector: sectionSelector
+        sectionSelectors: this.options.sectionSelectors
       });
       
       await page.close();
@@ -225,13 +235,13 @@ export class WebScraper {
     }
   }
 
-  async scrapeMultiplePages(urls, structured = false, options = {}) {
+  async scrapeMultiplePages(urls, structured = false) {
     const results = [];
     
     for (const url of urls) {
       try {
         const result = structured 
-          ? await this.scrapeTextStructured(url, options)
+          ? await this.scrapeTextStructured(url)
           : await this.scrapeText(url);
         results.push(result);
         

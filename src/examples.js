@@ -49,11 +49,28 @@ async function runExamples() {
     const customResult = await customScraper.scrapeText('https://example.com');
     console.log('Custom scraper result length:', customResult.length);
     await customScraper.close();
+    console.log('---\n');
+
+    console.log('=== Example 5: Multiple section selectors ===');
+    const sectionScraper = new WebScraper({
+      sectionSelectors: ['h1', 'p']
+    });
+    
+    const sectionResult = await sectionScraper.scrapeTextStructured('https://example.com');
+    console.log('Title:', sectionResult.title);
+    console.log('Number of sections found:', sectionResult.sections?.length || 0);
+    if (sectionResult.sections) {
+      sectionResult.sections.forEach((section, idx) => {
+        console.log(`  Section ${idx + 1}: ${section.title || section.id}`);
+      });
+    }
+    await sectionScraper.close();
 
   } catch (error) {
     console.error('Example failed:', error.message);
   } finally {
     await scraper.close();
+    process.exit(0);
   }
 }
 

@@ -95,6 +95,41 @@ async function runTests() {
     await scraper.close();
   });
 
+  // Test 7: Multiple section selectors (array)
+  await test('Multiple section selectors as array', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      sectionSelectors: ['article', 'section', '.content', 'main', 'div']
+    });
+    
+    if (!Array.isArray(scraper.options.sectionSelectors)) {
+      throw new Error('sectionSelectors should be an array');
+    }
+    if (scraper.options.sectionSelectors.length !== 5) {
+      throw new Error('sectionSelectors array length mismatch');
+    }
+    
+    const result = await scraper.scrapeTextStructured('https://example.com');
+    if (!result.sections) throw new Error('Sections not extracted');
+    if (!Array.isArray(result.sections)) throw new Error('Sections should be an array');
+    
+    await scraper.close();
+  });
+
+  // Test 9: Override section selectors per request
+  await test('Override section selectors per request', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      sectionSelectors: ['div', 'article']
+    });
+    
+    const result = await scraper.scrapeTextStructured('https://example.com');
+    
+    if (!result.sections) throw new Error('Sections not extracted');
+    
+    await scraper.close();
+  });
+
   console.log('📊 Test Results:');
   console.log(`✅ Passed: ${passed}`);
   console.log(`❌ Failed: ${failed}`);

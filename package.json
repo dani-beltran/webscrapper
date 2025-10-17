@@ -11,7 +11,8 @@
     "list-presets": "node src/commands/list-presets.js",
     "show-preset": "node src/commands/show-preset.js",
     "install-browsers": "npx playwright install",
-    "test": "node src/test.js"
+    "test": "node src/test.js",
+    "debug": "PWDEBUG=1 node src/commands/scrape.js"
   },
   "keywords": [
     "webscraping",

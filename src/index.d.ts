@@ -5,7 +5,6 @@ export type {
   ScrapeTextResult,
   ScrapeStructuredResult,
   ScrapeErrorResult,
-  ScrapeTextStructuredOptions,
   LinkData,
   ListData,
   StructuredData,

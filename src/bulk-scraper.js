@@ -24,7 +24,6 @@ export class BulkScraper {
       outputFile = null,
       batchSize = 5,
       delay = 1000,
-      groupBy = null
     } = options;
 
     const results = [];
@@ -36,8 +35,7 @@ export class BulkScraper {
       const batch = urls.slice(i, i + batchSize);
       console.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(urls.length / batchSize)}`);
       
-      const scrapeOptions = groupBy ? { sectionSelector: groupBy } : {};
-      const batchResults = await this.scraper.scrapeMultiplePages(batch, structured, scrapeOptions);
+      const batchResults = await this.scraper.scrapeMultiplePages(batch, structured);
       results.push(...batchResults);
       
       // Delay between batches

@@ -46,12 +46,12 @@ export class ConfigurableScraper {
     return await this.scraper.scrapeText(url);
   }
 
-  async scrapeTextStructured(url, options = {}) {
-    return await this.scraper.scrapeTextStructured(url, options);
+  async scrapeTextStructured(url) {
+    return await this.scraper.scrapeTextStructured(url);
   }
 
-  async scrapeMultiplePages(urls, structured = false, options = {}) {
-    return await this.scraper.scrapeMultiplePages(urls, structured, options);
+  async scrapeMultiplePages(urls, structured = false) {
+    return await this.scraper.scrapeMultiplePages(urls, structured);
   }
 
   async close() {
