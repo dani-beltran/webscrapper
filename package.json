@@ -1,6 +1,6 @@
 {
   "name": "@danilidonbeltran/webscrapper",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A web scraper using Playwright to extract all text content from websites",
   "main": "src/index.js",
   "types": "src/index.d.ts",
