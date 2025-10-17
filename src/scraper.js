@@ -100,7 +100,7 @@ export class WebScraper {
     }
   }
 
-  async scrapeTextStructured(url, options = {}) {
+  async scrapeTextStructured(url) {
     try {
       await this.init();
       
@@ -126,8 +126,9 @@ export class WebScraper {
           const data = {
             headings: {},
             paragraphs: [],
+            otherText: [],
             links: [],
-            lists: []
+            lists: [],
           };
           
           // Extract headings
@@ -162,6 +163,35 @@ export class WebScraper {
                 .filter(text => text.length > 0)
             }))
             .filter(list => list.items.length > 0);
+          
+          // Extract all text nodes whose parent is not <p>
+          const walker = document.createTreeWalker(
+            element,
+            NodeFilter.SHOW_TEXT,
+            {
+              acceptNode: function(node) {
+                // Skip if parent is a paragraph
+                if (node.parentElement && node.parentElement.tagName === 'P') {
+                  return NodeFilter.FILTER_REJECT;
+                }
+                // Skip empty or whitespace-only text nodes
+                const text = node.textContent.trim();
+                if (!text || text.length === 0) {
+                  return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+              }
+            },
+            false
+          );
+          
+          let textNode;
+          while (textNode = walker.nextNode()) {
+            const text = textNode.textContent.trim();
+            if (text) {
+              data.otherText.push(text);
+            }
+          }
           
           return data;
         };
