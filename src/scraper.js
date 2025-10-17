@@ -42,8 +42,6 @@ export class WebScraper {
     try {
       await this.init();
       
-      console.log(`Scraping text from: ${url}`);
-      
       const page = await this.context.newPage();
       
       // Set timeout
@@ -98,7 +96,6 @@ export class WebScraper {
       };
       
     } catch (error) {
-      console.error(`Error scraping ${url}:`, error.message);
       throw error;
     }
   }
@@ -106,8 +103,6 @@ export class WebScraper {
   async scrapeTextStructured(url, options = {}) {
     try {
       await this.init();
-      
-      console.log(`Scraping structured text from: ${url}`);
       
       const page = await this.context.newPage();
       page.setDefaultTimeout(this.options.timeout);
@@ -120,7 +115,6 @@ export class WebScraper {
 
       // Extract structured content
       const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelectors }) => {
-        console.log('Extracting structured content...', sectionSelectors);
         // Remove excluded elements
         excludeSelectors.forEach(selector => {
           const elements = document.querySelectorAll(selector);
@@ -230,7 +224,6 @@ export class WebScraper {
       };
       
     } catch (error) {
-      console.error(`Error scraping structured content from ${url}:`, error.message);
       throw error;
     }
   }

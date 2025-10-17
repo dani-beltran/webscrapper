@@ -28,13 +28,9 @@ export class BulkScraper {
 
     const results = [];
     
-    console.log(`📋 Starting bulk scraping of ${urls.length} URLs...`);
-    
     // Process URLs in batches
     for (let i = 0; i < urls.length; i += batchSize) {
       const batch = urls.slice(i, i + batchSize);
-      console.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(urls.length / batchSize)}`);
-      
       const batchResults = await this.scraper.scrapeMultiplePages(batch, structured);
       results.push(...batchResults);
       
@@ -81,8 +77,6 @@ export class BulkScraper {
       default:
         throw new Error(`Unsupported format: ${format}`);
     }
-    
-    console.log(`💾 Results saved to: ${outputPath}`);
   }
 
   extractTextFromStructured(result) {
