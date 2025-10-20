@@ -1,3 +1,5 @@
+export { RedirectError } from './errors/RedirectError.js';
+
 export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
@@ -72,10 +74,22 @@ export declare class WebScraper {
 
   init(): Promise<void>;
 
-  scrapeText(url: string): Promise<ScrapeTextResult | ScrapeRedirectResult>;
+  /**
+   * Scrape text content from a URL
+   * @throws {RedirectError} When followRedirects is false and a redirect is detected
+   */
+  scrapeText(url: string): Promise<ScrapeTextResult>;
 
-  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult | ScrapeRedirectResult>;
+  /**
+   * Scrape structured content from a URL
+   * @throws {RedirectError} When followRedirects is false and a redirect is detected
+   */
+  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult>;
 
+  /**
+   * Scrape multiple pages
+   * Note: RedirectErrors are caught and converted to ScrapeRedirectResult objects in the results array
+   */
   scrapeMultiplePages(
     urls: string[],
     structured?: boolean,

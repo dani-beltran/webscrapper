@@ -160,20 +160,27 @@ const results = await bulkScraper.scrapeUrls(urls, {
 Control how the scraper handles HTTP redirects (301, 302, 303, 307, 308):
 
 ```javascript
+import { WebScraper, RedirectError } from './src/scraper.js';
+
 const scraper = new WebScraper({
   followRedirects: false  // Don't follow redirects (default: true)
 });
 
-const result = await scraper.scrapeText('https://example.com/old-page');
-// If a redirect is encountered, returns:
-// {
-//   url: 'https://example.com/old-page',
-//   redirect: true,
-//   status: 301,
-//   location: 'https://example.com/new-page',
-//   message: 'Redirect detected (301) to: https://example.com/new-page',
-//   timestamp: '2025-10-20T10:00:00.000Z'
-// }
+try {
+  const result = await scraper.scrapeText('https://example.com/old-page');
+  // Normal scraping if no redirect
+  console.log(result.text);
+} catch (error) {
+  // Redirect detected - throws RedirectError
+  if (error instanceof RedirectError) {
+    console.log(`Redirect ${error.status}: ${error.originalUrl} -> ${error.location}`);
+    console.log(error.message);
+    // error.status - HTTP status code (301, 302, etc.)
+    // error.location - redirect target URL
+    // error.originalUrl - original URL that redirected
+    // error.timestamp - ISO timestamp
+  }
+}
 ```
 
 **Use cases:**

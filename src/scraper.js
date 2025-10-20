@@ -1,4 +1,7 @@
 import { chromium, firefox, webkit } from 'playwright';
+import { RedirectError } from './errors/RedirectError.js';
+
+export { RedirectError };
 
 export class WebScraper {
   constructor(options = {}) {
@@ -72,14 +75,7 @@ export class WebScraper {
       // Check if we detected a redirect when followRedirects is false
       if (!this.options.followRedirects && redirectInfo) {
         await page.close();
-        return {
-          url,
-          redirect: true,
-          status: redirectInfo.status,
-          location: redirectInfo.location,
-          message: `Redirect detected (${redirectInfo.status}) to: ${redirectInfo.location}`,
-          timestamp: new Date().toISOString()
-        };
+        throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }
       
       // Wait for specific selector if provided
@@ -162,14 +158,7 @@ export class WebScraper {
       // Check if we detected a redirect when followRedirects is false
       if (!this.options.followRedirects && redirectInfo) {
         await page.close();
-        return {
-          url,
-          redirect: true,
-          status: redirectInfo.status,
-          location: redirectInfo.location,
-          message: `Redirect detected (${redirectInfo.status}) to: ${redirectInfo.location}`,
-          timestamp: new Date().toISOString()
-        };
+        throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }
       
       if (this.options.waitForSelector) {
@@ -336,11 +325,23 @@ export class WebScraper {
         // Add small delay between requests to be respectful
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
-        results.push({
-          url,
-          error: error.message,
-          timestamp: new Date().toISOString()
-        });
+        // Check if it's a redirect error
+        if (error instanceof RedirectError) {
+          results.push({
+            url: error.originalUrl,
+            redirect: true,
+            status: error.status,
+            location: error.location,
+            message: error.message,
+            timestamp: error.timestamp
+          });
+        } else {
+          results.push({
+            url,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     }
     

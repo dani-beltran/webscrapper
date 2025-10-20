@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { WebScraper } from '../scraper.js';
+import { WebScraper, RedirectError } from '../scraper.js';
 import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
 
@@ -210,23 +210,51 @@ async function handleSingleMode(args) {
     sectionSelectors: options.groupBy
   });
 
-  const result = options.structured 
-    ? await scraper.scrapeTextStructured(url)
-    : await scraper.scrapeText(url);
+  let result;
+  try {
+    result = options.structured 
+      ? await scraper.scrapeTextStructured(url)
+      : await scraper.scrapeText(url);
+  } catch (error) {
+    await scraper.close();
+    
+    // Check if it's a redirect error
+    if (error instanceof RedirectError) {
+      console.log('\n🔄 Redirect Detected!');
+      console.log(`   Status: ${error.status}`);
+      console.log(`   Original URL: ${error.originalUrl}`);
+      console.log(`   Redirects to: ${error.location}`);
+      console.log(`   Message: ${error.message}`);
+      
+      // Save redirect info if output file requested
+      if (options.outputFile) {
+        const fs = await import('fs');
+        const redirectResult = {
+          url: error.originalUrl,
+          redirect: true,
+          status: error.status,
+          location: error.location,
+          message: error.message,
+          timestamp: error.timestamp
+        };
+        fs.writeFileSync(options.outputFile, JSON.stringify(redirectResult, null, 2));
+        console.log(`💾 Redirect info saved to: ${options.outputFile}`);
+      }
+      
+      console.log('\n✅ Redirect detection completed!');
+      return;
+    }
+    
+    // Re-throw if it's not a redirect error
+    throw error;
+  }
 
   await scraper.close();
 
   // Display results
   console.log('\n📊 Results:');
   
-  // Check if we got a redirect result
-  if (result.redirect) {
-    console.log(`🔄 Redirect Detected!`);
-    console.log(`   Status: ${result.status}`);
-    console.log(`   Original URL: ${result.url}`);
-    console.log(`   Redirects to: ${result.location}`);
-    console.log(`   Message: ${result.message}`);
-  } else if (options.structured) {
+  if (options.structured) {
     console.log(`📄 Title: ${result.title || 'N/A'}`);
     
     if (result.sections) {
