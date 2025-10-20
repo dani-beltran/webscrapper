@@ -30,6 +30,7 @@ export interface StructuredData {
     [key: string]: string[];
   };
   paragraphs: string[];
+  otherText: string[];
   links: LinkData[];
   lists: ListData[];
 }
@@ -39,17 +40,11 @@ export interface SectionData extends StructuredData {
   title: string | null;
 }
 
-export interface ScrapeStructuredResult {
+export interface ScrapeStructuredResult extends Partial<StructuredData> {
   url: string;
   title: string;
   timestamp: string;
   sections?: SectionData[];
-  headings?: {
-    [key: string]: string[];
-  };
-  paragraphs?: string[];
-  links?: LinkData[];
-  lists?: ListData[];
 }
 
 export interface ScrapeErrorResult {
