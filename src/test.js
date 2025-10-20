@@ -130,6 +130,35 @@ async function runTests() {
     await scraper.close();
   });
 
+  // Test 10: Redirect handling disabled
+  await test('Redirect handling disabled', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      followRedirects: false
+    });
+    
+    if (scraper.options.followRedirects !== false) {
+      throw new Error('followRedirects should be false');
+    }
+    
+    // Note: This test validates the option is set correctly
+    // A real redirect test would require a server that returns 301/302
+    await scraper.close();
+  });
+
+  // Test 11: Redirect handling enabled (default)
+  await test('Redirect handling enabled by default', async () => {
+    const scraper = new WebScraper({
+      headless: true
+    });
+    
+    if (scraper.options.followRedirects !== true) {
+      throw new Error('followRedirects should be true by default');
+    }
+    
+    await scraper.close();
+  });
+
   console.log('📊 Test Results:');
   console.log(`✅ Passed: ${passed}`);
   console.log(`❌ Failed: ${failed}`);

@@ -6,6 +6,7 @@ export interface WebScraperOptions {
   waitForSelector?: string | null;
   excludeSelectors?: string[];
   userAgent?: string;
+  followRedirects?: boolean;
 }
 
 export interface ScrapeTextResult {
@@ -53,6 +54,15 @@ export interface ScrapeErrorResult {
   timestamp: string;
 }
 
+export interface ScrapeRedirectResult {
+  url: string;
+  redirect: true;
+  status: number;
+  location: string;
+  message: string;
+  timestamp: string;
+}
+
 export declare class WebScraper {
   options: Required<WebScraperOptions>;
   browser: any | null;
@@ -62,14 +72,14 @@ export declare class WebScraper {
 
   init(): Promise<void>;
 
-  scrapeText(url: string): Promise<ScrapeTextResult>;
+  scrapeText(url: string): Promise<ScrapeTextResult | ScrapeRedirectResult>;
 
-  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult>;
+  scrapeTextStructured(url: string): Promise<ScrapeStructuredResult | ScrapeRedirectResult>;
 
   scrapeMultiplePages(
     urls: string[],
     structured?: boolean,
-  ): Promise<Array<ScrapeTextResult | ScrapeStructuredResult | ScrapeErrorResult>>;
+  ): Promise<Array<ScrapeTextResult | ScrapeStructuredResult | ScrapeErrorResult | ScrapeRedirectResult>>;
 
   close(): Promise<void>;
 }

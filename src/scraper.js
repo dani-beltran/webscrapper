@@ -9,7 +9,8 @@ export class WebScraper {
       sectionSelectors: options.sectionSelectors || [],
       waitForSelector: options.waitForSelector || null,
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
-      userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      followRedirects: options.followRedirects !== false
     };
     this.browser = null;
     this.context = null;
@@ -47,8 +48,39 @@ export class WebScraper {
       // Set timeout
       page.setDefaultTimeout(this.options.timeout);
       
+      // Handle redirect detection if followRedirects is false
+      let redirectInfo = null;
+      if (!this.options.followRedirects) {
+        // Listen for the initial response to capture redirect status codes
+        page.on('response', (response) => {
+          if (response.url() === url || response.request().redirectedFrom()) {
+            const status = response.status();
+            if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+              redirectInfo = {
+                status,
+                location: response.headers()['location'] || response.url(),
+                url: response.url()
+              };
+            }
+          }
+        });
+      }
+      
       // Navigate to the page
-      await page.goto(url, { waitUntil: 'networkidle' });
+      const response = await page.goto(url, { waitUntil: 'networkidle' });
+      
+      // Check if we detected a redirect when followRedirects is false
+      if (!this.options.followRedirects && redirectInfo) {
+        await page.close();
+        return {
+          url,
+          redirect: true,
+          status: redirectInfo.status,
+          location: redirectInfo.location,
+          message: `Redirect detected (${redirectInfo.status}) to: ${redirectInfo.location}`,
+          timestamp: new Date().toISOString()
+        };
+      }
       
       // Wait for specific selector if provided
       if (this.options.waitForSelector) {
@@ -107,7 +139,38 @@ export class WebScraper {
       const page = await this.context.newPage();
       page.setDefaultTimeout(this.options.timeout);
       
-      await page.goto(url, { waitUntil: 'networkidle' });
+      // Handle redirect detection if followRedirects is false
+      let redirectInfo = null;
+      if (!this.options.followRedirects) {
+        // Listen for the initial response to capture redirect status codes
+        page.on('response', (response) => {
+          if (response.url() === url || response.request().redirectedFrom()) {
+            const status = response.status();
+            if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+              redirectInfo = {
+                status,
+                location: response.headers()['location'] || response.url(),
+                url: response.url()
+              };
+            }
+          }
+        });
+      }
+      
+      const response = await page.goto(url, { waitUntil: 'networkidle' });
+      
+      // Check if we detected a redirect when followRedirects is false
+      if (!this.options.followRedirects && redirectInfo) {
+        await page.close();
+        return {
+          url,
+          redirect: true,
+          status: redirectInfo.status,
+          location: redirectInfo.location,
+          message: `Redirect detected (${redirectInfo.status}) to: ${redirectInfo.location}`,
+          timestamp: new Date().toISOString()
+        };
+      }
       
       if (this.options.waitForSelector) {
         await page.waitForSelector(this.options.waitForSelector);

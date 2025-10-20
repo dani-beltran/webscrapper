@@ -105,7 +105,8 @@ const customScraper = new WebScraper({
   headless: true,
   timeout: 30000,
   waitForSelector: '.main-content',
-  excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer']
+  excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
+  followRedirects: false  // Don't follow 301/302 redirects (default: true)
 });
 
 // Structured extraction
@@ -153,6 +154,33 @@ const results = await bulkScraper.scrapeUrls(urls, {
 ```
 
 ## 🎯 Advanced Features
+
+### Redirect Handling
+
+Control how the scraper handles HTTP redirects (301, 302, 303, 307, 308):
+
+```javascript
+const scraper = new WebScraper({
+  followRedirects: false  // Don't follow redirects (default: true)
+});
+
+const result = await scraper.scrapeText('https://example.com/old-page');
+// If a redirect is encountered, returns:
+// {
+//   url: 'https://example.com/old-page',
+//   redirect: true,
+//   status: 301,
+//   location: 'https://example.com/new-page',
+//   message: 'Redirect detected (301) to: https://example.com/new-page',
+//   timestamp: '2025-10-20T10:00:00.000Z'
+// }
+```
+
+**Use cases:**
+- ✅ Detect moved or deprecated URLs
+- ✅ Track redirect chains in bulk operations
+- ✅ Validate URL structure without following redirects
+- ✅ Audit SEO redirect configurations
 
 ### Multiple Section Selectors
 

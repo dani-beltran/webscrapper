@@ -17,6 +17,7 @@ Options:
   --browser <type>          - Browser to use: chromium, firefox, webkit (default: chromium)
   --timeout <ms>            - Timeout in milliseconds (default: 30000)
   --no-headless             - Run with browser window visible
+  --no-follow-redirects     - Don't follow 301/302 redirects, return redirect info instead
   --output <file>           - Save output to file (JSON format)
   --file <path>             - Read URLs from file (triggers bulk mode)
   --help, -h                - Show this help message
@@ -136,7 +137,8 @@ async function handleSingleMode(args) {
     timeout: 30000,
     structured: false,
     outputFile: null,
-    groupBy: []
+    groupBy: [],
+    followRedirects: true
   };
 
   // Parse arguments
@@ -156,6 +158,9 @@ async function handleSingleMode(args) {
         break;
       case '--no-headless':
         options.headless = false;
+        break;
+      case '--no-follow-redirects':
+        options.followRedirects = false;
         break;
       case '--output':
         options.outputFile = args[++i];
@@ -192,7 +197,8 @@ async function handleSingleMode(args) {
 
   console.log(`🚀 Scraping: ${url}`);
   console.log(`🔧 Browser: ${options.browser}, Headless: ${options.headless}, Structured: ${options.structured}`);
-  if (options.groupBy) {
+  console.log(`🔄 Follow Redirects: ${options.followRedirects}`);
+  if (options.groupBy.length > 0) {
     console.log(`📦 Grouping by selector: ${options.groupBy}`);
   }
   
@@ -200,7 +206,8 @@ async function handleSingleMode(args) {
     browser: options.browser,
     headless: options.headless,
     timeout: options.timeout,
-    sectionSelectors: options.groupBy ? [options.groupBy] : undefined
+    followRedirects: options.followRedirects,
+    sectionSelectors: options.groupBy
   });
 
   const result = options.structured 
@@ -211,7 +218,15 @@ async function handleSingleMode(args) {
 
   // Display results
   console.log('\n📊 Results:');
-  if (options.structured) {
+  
+  // Check if we got a redirect result
+  if (result.redirect) {
+    console.log(`🔄 Redirect Detected!`);
+    console.log(`   Status: ${result.status}`);
+    console.log(`   Original URL: ${result.url}`);
+    console.log(`   Redirects to: ${result.location}`);
+    console.log(`   Message: ${result.message}`);
+  } else if (options.structured) {
     console.log(`📄 Title: ${result.title || 'N/A'}`);
     
     if (result.sections) {
@@ -260,7 +275,8 @@ async function handleBulkMode(args) {
   let scraperOptions = {
     headless: true,
     browser: 'chromium',
-    timeout: 30000
+    timeout: 30000,
+    followRedirects: true
   };
   let bulkOptions = {
     structured: false,
@@ -268,7 +284,7 @@ async function handleBulkMode(args) {
     batchSize: 5,
     delay: 1000,
     outputFile: null,
-    groupBy: null
+    groupBy: []
   };
 
   // Parse arguments
@@ -296,7 +312,7 @@ async function handleBulkMode(args) {
         bulkOptions.structured = true;
         break;
       case '--group-by':
-        bulkOptions.groupBy = args[++i];
+        bulkOptions.groupBy.push(args[++i]);
         bulkOptions.structured = true; // Auto-enable structured mode when grouping
         break;
       case '--headless':
@@ -304,6 +320,9 @@ async function handleBulkMode(args) {
         break;
       case '--no-headless':
         scraperOptions.headless = false;
+        break;
+      case '--no-follow-redirects':
+        scraperOptions.followRedirects = false;
         break;
       default:
         if (subMode === 'urls' && !args[i].startsWith('--')) {
@@ -354,7 +373,7 @@ async function handleBulkMode(args) {
   console.log(`   Delay: ${bulkOptions.delay}ms`);
   console.log(`   Structured: ${bulkOptions.structured}`);
   console.log(`   Output format: ${bulkOptions.outputFormat}`);
-  if (bulkOptions.groupBy) {
+  if (bulkOptions.groupBy.length > 0) {
     console.log(`   Group by selector: ${bulkOptions.groupBy}`);
   };
   
@@ -446,7 +465,7 @@ async function handleConfigScrapeCommand(args) {
     outputFile: null,
     format: 'full', // Always use full format
     customOptions: {},
-    groupBy: null
+    groupBy: []
   };
 
   // Parse arguments
@@ -469,8 +488,11 @@ async function handleConfigScrapeCommand(args) {
       case '--no-headless':
         options.customOptions.headless = false;
         break;
+      case '--no-follow-redirects':
+        options.customOptions.followRedirects = false;
+        break;
       case '--group-by':
-        options.customOptions.sectionSelectors = [args[++i]];
+        options.groupBy.push(args[++i]);
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {
@@ -503,11 +525,11 @@ async function handleConfigScrapeCommand(args) {
   if (Object.keys(options.customOptions).length > 0) {
     console.log(`🔧 Custom options: ${JSON.stringify(options.customOptions)}`);
   }
-  if (options.groupBy) {
+  if (options.groupBy.length > 0) {
     console.log(`📦 Grouping by selector: ${options.groupBy}`);
   }
-  
-  const scraper = new ConfigurableScraper(preset, options.customOptions);
+
+  const scraper = new ConfigurableScraper(preset, {groupBy: options.groupBy, ...options.customOptions});
   const result = await scraper.scrapeTextStructured(url);
   
   // Display results based on format
