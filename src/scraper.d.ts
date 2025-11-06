@@ -28,6 +28,12 @@ export interface ListData {
   items: string[];
 }
 
+export interface ImageData {
+  src: string;
+  alt: string;
+  title: string;
+}
+
 export interface StructuredData {
   headings: {
     [key: string]: string[];
@@ -36,6 +42,7 @@ export interface StructuredData {
   otherText: string[];
   links: LinkData[];
   lists: ListData[];
+  images: ImageData[];
 }
 
 export interface SectionData extends StructuredData {

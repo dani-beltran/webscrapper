@@ -53,6 +53,32 @@ async function runTests() {
     await scraper.close();
   });
 
+  // Test 3.5: Image extraction
+  await test('Image extraction from structured content', async () => {
+    const scraper = new WebScraper({ headless: true });
+    const result = await scraper.scrapeTextStructured('https://google.com');
+    
+    if (!result.images) throw new Error('Images array not in result');
+    if (!Array.isArray(result.images)) throw new Error('Images should be an array');
+
+    if (result.images.length < 1) {
+      throw new Error('No images extracted from the page');
+    }
+    
+    // If there are images, verify their structure
+    if (result.images.length > 0) {
+      const img = result.images[0];
+      if (!img.hasOwnProperty('src')) throw new Error('Image should have src property');
+      if (!img.hasOwnProperty('alt')) throw new Error('Image should have alt property');
+      if (!img.hasOwnProperty('title')) throw new Error('Image should have title property');
+      if (typeof img.src !== 'string') throw new Error('Image src should be a string');
+      if (typeof img.alt !== 'string') throw new Error('Image alt should be a string');
+      if (typeof img.title !== 'string') throw new Error('Image title should be a string');
+    }
+    
+    await scraper.close();
+  });
+
   // Test 4: Multiple pages scraping
   await test('Multiple pages scraping', async () => {
     const scraper = new WebScraper({ headless: true });

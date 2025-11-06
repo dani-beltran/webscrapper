@@ -181,6 +181,7 @@ export class WebScraper {
             otherText: [],
             links: [],
             lists: [],
+            images: [],
           };
           
           // Extract headings
@@ -215,6 +216,16 @@ export class WebScraper {
                 .filter(text => text.length > 0)
             }))
             .filter(list => list.items.length > 0);
+          
+            
+          // Extract images
+          data.images = Array.from(element.querySelectorAll('img[src]'))
+            .map(img => ({
+              src: img.src,
+              alt: img.alt || '',
+              title: img.title || ''
+            }))
+            .filter(img => img.src.length > 0);
           
           // Extract all text nodes whose parent is not <p>, <a>, <li> or <h>
           const excludedTags = [ 'P', 'A', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6' ];
