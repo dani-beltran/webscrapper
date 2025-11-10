@@ -1,4 +1,5 @@
 import { WebScraper } from './scraper.js';
+import { SectionNotFoundError } from './errors/index.js';
 
 async function runTests() {
   console.log('🧪 Running Web Scraper Tests...\n');
@@ -183,6 +184,36 @@ async function runTests() {
     }
     
     await scraper.close();
+  });
+
+  // Test 12: SectionNotFoundError handling
+  await test('SectionNotFoundError for non-existent sections', async () => {
+    const scraper = new WebScraper({
+      sectionSelectors: ['.non-existent-section', '#another-non-existent-section'],
+      headless: true
+    });
+    
+    try {
+      // This should throw a SectionNotFoundError
+      await scraper.scrapeTextStructured('https://example.com');
+      throw new Error('Should have thrown SectionNotFoundError');
+    } catch (error) {
+      if (!(error instanceof SectionNotFoundError)) {
+        throw new Error(`Expected SectionNotFoundError, got ${error.constructor.name}: ${error.message}`);
+      }
+      
+      // Verify error properties
+      if (!error.message) throw new Error('Error should have a message');
+      if (!error.selectors) throw new Error('Error should have selectors property');
+      if (!error.url) throw new Error('Error should have url property');
+      if (!error.timestamp) throw new Error('Error should have timestamp property');
+      
+      // Verify selectors match what we passed in
+      if (!Array.isArray(error.selectors)) throw new Error('Error selectors should be an array');
+      if (error.selectors.length !== 2) throw new Error('Error selectors should contain 2 elements');
+    } finally {
+      await scraper.close();
+    }
   });
 
   console.log('📊 Test Results:');

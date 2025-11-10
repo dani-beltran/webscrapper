@@ -1,7 +1,8 @@
 import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
+import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
 
-export { RedirectError };
+export { RedirectError, SectionNotFoundError };
 
 export class WebScraper {
   constructor(options = {}) {
@@ -297,7 +298,7 @@ export class WebScraper {
             });
           } else {
             // No sections found with any of the selectors
-            throw new Error(`No sections found with selectors: ${sectionSelectors.join(', ')}`);
+            return { error: 'SECTIONS_NOT_FOUND', selectors: sectionSelectors };
           }
         } else {
           // No section selectors provided, extract from entire document
@@ -309,6 +310,12 @@ export class WebScraper {
         excludeSelectors: this.options.excludeSelectors,
         sectionSelectors: this.options.sectionSelectors
       });
+      
+      // Check if sections were not found
+      if (structuredContent.error === 'SECTIONS_NOT_FOUND') {
+        await page.close();
+        throw new SectionNotFoundError(structuredContent.selectors, url);
+      }
       
       await page.close();
       
@@ -343,6 +350,14 @@ export class WebScraper {
             redirect: true,
             status: error.status,
             location: error.location,
+            message: error.message,
+            timestamp: error.timestamp
+          });
+        } else if (error instanceof SectionNotFoundError) {
+          results.push({
+            url: error.url,
+            sectionsNotFound: true,
+            selectors: error.selectors,
             message: error.message,
             timestamp: error.timestamp
           });
