@@ -1,8 +1,9 @@
 import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
 import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
+import { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
 
-export { RedirectError, SectionNotFoundError };
+export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
 
 export class WebScraper {
   constructor(options = {}) {
@@ -81,7 +82,9 @@ export class WebScraper {
       
       // Wait for specific selector if provided
       if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector);
+        await page.waitForSelector(this.options.waitForSelector).catch(() => {
+          throw new SelectorTimeoutError([this.options.waitForSelector], url);
+        });
       }
       
       // Remove excluded elements
@@ -163,7 +166,9 @@ export class WebScraper {
       }
       
       if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector);
+        await page.waitForSelector(this.options.waitForSelector).catch(() => {
+          throw new SelectorTimeoutError([this.options.waitForSelector], url);
+        });
       }
 
       // Extract structured content
