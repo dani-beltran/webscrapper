@@ -1,5 +1,6 @@
 export { RedirectError } from './errors/RedirectError.js';
 export { SectionNotFoundError } from './errors/SectionNotFoundError.js';
+export { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
 
 export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
