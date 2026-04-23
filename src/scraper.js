@@ -15,7 +15,8 @@ export class WebScraper {
       waitForSelector: options.waitForSelector || null,
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      followRedirects: options.followRedirects !== false
+      followPermanentRedirect: options.followPermanentRedirect !== false,
+      followTemporaryRedirect: options.followTemporaryRedirect !== false
     };
     this.browser = null;
     this.context = null;
@@ -53,14 +54,15 @@ export class WebScraper {
       // Set timeout
       page.setDefaultTimeout(this.options.timeout);
       
-      // Handle redirect detection if followRedirects is false
       let redirectInfo = null;
-      if (!this.options.followRedirects) {
-        // Listen for the initial response to capture redirect status codes
+      if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
         page.on('response', (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
             const status = response.status();
-            if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+            const isPermanent = status === 301 || status === 308;
+            const isTemporary = status === 302 || status === 303 || status === 307;
+            if ((isPermanent && !this.options.followPermanentRedirect) ||
+                (isTemporary && !this.options.followTemporaryRedirect)) {
               redirectInfo = {
                 status,
                 location: response.headers()['location'] || response.url(),
@@ -70,12 +72,11 @@ export class WebScraper {
           }
         });
       }
-      
+
       // Navigate to the page
       const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
-      
-      // Check if we detected a redirect when followRedirects is false
-      if (!this.options.followRedirects && redirectInfo) {
+
+      if (redirectInfo) {
         await page.close();
         throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }
@@ -139,14 +140,15 @@ export class WebScraper {
       const page = await this.context.newPage();
       page.setDefaultTimeout(this.options.timeout);
       
-      // Handle redirect detection if followRedirects is false
       let redirectInfo = null;
-      if (!this.options.followRedirects) {
-        // Listen for the initial response to capture redirect status codes
+      if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
         page.on('response', (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
             const status = response.status();
-            if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+            const isPermanent = status === 301 || status === 308;
+            const isTemporary = status === 302 || status === 303 || status === 307;
+            if ((isPermanent && !this.options.followPermanentRedirect) ||
+                (isTemporary && !this.options.followTemporaryRedirect)) {
               redirectInfo = {
                 status,
                 location: response.headers()['location'] || response.url(),
@@ -156,11 +158,10 @@ export class WebScraper {
           }
         });
       }
-      
+
       const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
-      
-      // Check if we detected a redirect when followRedirects is false
-      if (!this.options.followRedirects && redirectInfo) {
+
+      if (redirectInfo) {
         await page.close();
         throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }

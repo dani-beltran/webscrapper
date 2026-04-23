@@ -161,13 +161,17 @@ async function runTests() {
   await test('Redirect handling disabled', async () => {
     const scraper = new WebScraper({
       headless: true,
-      followRedirects: false
+      followPermanentRedirect: false,
+      followTemporaryRedirect: false
     });
-    
-    if (scraper.options.followRedirects !== false) {
-      throw new Error('followRedirects should be false');
+
+    if (scraper.options.followPermanentRedirect !== false) {
+      throw new Error('followPermanentRedirect should be false');
     }
-    
+    if (scraper.options.followTemporaryRedirect !== false) {
+      throw new Error('followTemporaryRedirect should be false');
+    }
+
     // Note: This test validates the option is set correctly
     // A real redirect test would require a server that returns 301/302
     await scraper.close();
@@ -178,11 +182,14 @@ async function runTests() {
     const scraper = new WebScraper({
       headless: true
     });
-    
-    if (scraper.options.followRedirects !== true) {
-      throw new Error('followRedirects should be true by default');
+
+    if (scraper.options.followPermanentRedirect !== true) {
+      throw new Error('followPermanentRedirect should be true by default');
     }
-    
+    if (scraper.options.followTemporaryRedirect !== true) {
+      throw new Error('followTemporaryRedirect should be true by default');
+    }
+
     await scraper.close();
   });
 

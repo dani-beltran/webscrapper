@@ -1,5 +1,5 @@
 /**
- * Custom error class thrown when a redirect is detected with followRedirects: false
+ * Custom error class thrown when a redirect is detected and the matching followPermanentRedirect/followTemporaryRedirect option is false
  */
 export declare class RedirectError extends Error {
   name: 'RedirectError';

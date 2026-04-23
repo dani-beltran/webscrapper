@@ -10,7 +10,8 @@ export interface WebScraperOptions {
   waitForSelector?: string | null;
   excludeSelectors?: string[];
   userAgent?: string;
-  followRedirects?: boolean;
+  followPermanentRedirect?: boolean;
+  followTemporaryRedirect?: boolean;
 }
 
 export interface ScrapeTextResult {
@@ -85,13 +86,13 @@ export declare class WebScraper {
 
   /**
    * Scrape text content from a URL
-   * @throws {RedirectError} When followRedirects is false and a redirect is detected
+   * @throws {RedirectError} When followPermanentRedirect or followTemporaryRedirect is false and a matching redirect is detected
    */
   scrapeText(url: string): Promise<ScrapeTextResult>;
 
   /**
    * Scrape structured content from a URL
-   * @throws {RedirectError} When followRedirects is false and a redirect is detected
+   * @throws {RedirectError} When followPermanentRedirect or followTemporaryRedirect is false and a matching redirect is detected
    */
   scrapeTextStructured(url: string): Promise<ScrapeStructuredResult>;
 

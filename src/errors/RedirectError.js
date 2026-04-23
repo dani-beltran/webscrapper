@@ -1,6 +1,6 @@
 /**
  * Custom error class for redirect detection
- * Thrown when a redirect is detected with followRedirects: false
+ * Thrown when a redirect is detected and the matching followPermanentRedirect/followTemporaryRedirect option is false
  */
 export class RedirectError extends Error {
   constructor(status, location, originalUrl) {

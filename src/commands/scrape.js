@@ -17,7 +17,8 @@ Options:
   --browser <type>          - Browser to use: chromium, firefox, webkit (default: chromium)
   --timeout <ms>            - Timeout in milliseconds (default: 30000)
   --no-headless             - Run with browser window visible
-  --no-follow-redirects     - Don't follow 301/302 redirects, return redirect info instead
+  --no-follow-permanent-redirect  - Don't follow permanent redirects (301, 308)
+  --no-follow-temporary-redirect  - Don't follow temporary redirects (302, 303, 307)
   --output <file>           - Save output to file (JSON format)
   --file <path>             - Read URLs from file (triggers bulk mode)
   --help, -h                - Show this help message
@@ -138,13 +139,14 @@ async function handleSingleMode(args) {
     structured: false,
     outputFile: null,
     groupBy: [],
-    followRedirects: true
+    followPermanentRedirect: true,
+    followTemporaryRedirect: true
   };
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     switch (arg) {
       case '--structured':
       case '-s':
@@ -159,8 +161,11 @@ async function handleSingleMode(args) {
       case '--no-headless':
         options.headless = false;
         break;
-      case '--no-follow-redirects':
-        options.followRedirects = false;
+      case '--no-follow-permanent-redirect':
+        options.followPermanentRedirect = false;
+        break;
+      case '--no-follow-temporary-redirect':
+        options.followTemporaryRedirect = false;
         break;
       case '--output':
         options.outputFile = args[++i];
@@ -197,7 +202,7 @@ async function handleSingleMode(args) {
 
   console.log(`🚀 Scraping: ${url}`);
   console.log(`🔧 Browser: ${options.browser}, Headless: ${options.headless}, Structured: ${options.structured}`);
-  console.log(`🔄 Follow Redirects: ${options.followRedirects}`);
+  console.log(`🔄 Follow Permanent Redirects: ${options.followPermanentRedirect}, Follow Temporary Redirects: ${options.followTemporaryRedirect}`);
   if (options.groupBy.length > 0) {
     console.log(`📦 Grouping by selector: ${options.groupBy}`);
   }
@@ -206,7 +211,8 @@ async function handleSingleMode(args) {
     browser: options.browser,
     headless: options.headless,
     timeout: options.timeout,
-    followRedirects: options.followRedirects,
+    followPermanentRedirect: options.followPermanentRedirect,
+    followTemporaryRedirect: options.followTemporaryRedirect,
     sectionSelectors: options.groupBy
   });
 
@@ -304,7 +310,8 @@ async function handleBulkMode(args) {
     headless: true,
     browser: 'chromium',
     timeout: 30000,
-    followRedirects: true
+    followPermanentRedirect: true,
+    followTemporaryRedirect: true
   };
   let bulkOptions = {
     structured: false,
@@ -349,8 +356,11 @@ async function handleBulkMode(args) {
       case '--no-headless':
         scraperOptions.headless = false;
         break;
-      case '--no-follow-redirects':
-        scraperOptions.followRedirects = false;
+      case '--no-follow-permanent-redirect':
+        scraperOptions.followPermanentRedirect = false;
+        break;
+      case '--no-follow-temporary-redirect':
+        scraperOptions.followTemporaryRedirect = false;
         break;
       default:
         if (subMode === 'urls' && !args[i].startsWith('--')) {
@@ -516,8 +526,11 @@ async function handleConfigScrapeCommand(args) {
       case '--no-headless':
         options.customOptions.headless = false;
         break;
-      case '--no-follow-redirects':
-        options.customOptions.followRedirects = false;
+      case '--no-follow-permanent-redirect':
+        options.customOptions.followPermanentRedirect = false;
+        break;
+      case '--no-follow-temporary-redirect':
+        options.customOptions.followTemporaryRedirect = false;
         break;
       case '--group-by':
         options.groupBy.push(args[++i]);
