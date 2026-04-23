@@ -106,7 +106,8 @@ const customScraper = new WebScraper({
   timeout: 30000,
   waitForSelector: '.main-content',
   excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
-  followRedirects: false  // Don't follow 301/302 redirects (default: true)
+  followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
+  followTemporaryRedirect: false   // Don't follow temporary redirects 302/303/307 (default: true)
 });
 
 // Structured extraction
@@ -157,13 +158,21 @@ const results = await bulkScraper.scrapeUrls(urls, {
 
 ### Redirect Handling
 
-Control how the scraper handles HTTP redirects (301, 302, 303, 307, 308):
+Control how the scraper handles HTTP redirects independently for permanent (301, 308) and temporary (302, 303, 307) redirects:
 
 ```javascript
 import { WebScraper, RedirectError } from './src/scraper.js';
 
+// Throw on all redirects
 const scraper = new WebScraper({
-  followRedirects: false  // Don't follow redirects (default: true)
+  followPermanentRedirect: false,  // Don't follow 301/308 (default: true)
+  followTemporaryRedirect: false   // Don't follow 302/303/307 (default: true)
+});
+
+// Follow permanent redirects only
+const permanentOnlyScraper = new WebScraper({
+  followPermanentRedirect: true,
+  followTemporaryRedirect: false
 });
 
 try {
