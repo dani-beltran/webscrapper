@@ -105,6 +105,7 @@ const customScraper = new WebScraper({
   headless: true,
   timeout: 30000,
   waitForSelector: '.main-content',
+  waitUntil: 'domcontentloaded',   // Navigation wait strategy (default: 'domcontentloaded')
   excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
   followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
   followTemporaryRedirect: false   // Don't follow temporary redirects 302/303/307 (default: true)
@@ -221,6 +222,33 @@ This is useful when:
 - ✅ More flexible scraping across different page layouts
 - ✅ Fallback selectors if primary selector doesn't match
 - ✅ Combine multiple content areas (e.g., main article + sidebars)
+
+### Navigation Wait Strategy (`waitUntil`)
+
+Control when Playwright considers navigation complete. Useful for pages that load content at different stages:
+
+| Value | Wait for | Best for |
+|-------|----------|----------|
+| `'domcontentloaded'` | HTML parsed, DOM ready (default) | Most pages — fast and reliable |
+| `'load'` | All resources (images, scripts, stylesheets) | Pages where initial layout matters |
+| `'networkidle'` | No network activity for 500ms | Heavy SPAs that fetch data on load |
+| `'commit'` | First byte received | Fast link-following / redirect detection |
+
+```javascript
+// Default — fastest, works for most pages
+const scraper = new WebScraper({ waitUntil: 'domcontentloaded' });
+
+// Wait for all assets (images, fonts, etc.)
+const scraper = new WebScraper({ waitUntil: 'load' });
+
+// Wait for API calls to finish on a SPA
+const scraper = new WebScraper({ waitUntil: 'networkidle' });
+```
+
+**Tips:**
+- `'domcontentloaded'` is the default — prefer it unless content is missing.
+- Use `'networkidle'` for SPAs that render after async data fetches, but expect slower scraping.
+- Combine with `waitForSelector` to wait for a specific element after navigation.
 
 ## 📊 Output Formats
 

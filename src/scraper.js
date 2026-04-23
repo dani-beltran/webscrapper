@@ -13,6 +13,7 @@ export class WebScraper {
       timeout: options.timeout || 30000,
       sectionSelectors: options.sectionSelectors || [],
       waitForSelector: options.waitForSelector || null,
+      waitUntil: options.waitUntil || 'domcontentloaded',
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       followPermanentRedirect: options.followPermanentRedirect !== false,
@@ -74,7 +75,7 @@ export class WebScraper {
       }
 
       // Navigate to the page
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
+      const response = await page.goto(url, { waitUntil: this.options.waitUntil });
 
       if (redirectInfo) {
         await page.close();
@@ -159,7 +160,7 @@ export class WebScraper {
         });
       }
 
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
+      const response = await page.goto(url, { waitUntil: this.options.waitUntil });
 
       if (redirectInfo) {
         await page.close();

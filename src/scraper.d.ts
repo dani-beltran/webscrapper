@@ -8,6 +8,7 @@ export interface WebScraperOptions {
   timeout?: number;
   sectionSelectors?: string[];
   waitForSelector?: string | null;
+  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
   excludeSelectors?: string[];
   userAgent?: string;
   followPermanentRedirect?: boolean;
