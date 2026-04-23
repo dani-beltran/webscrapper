@@ -72,7 +72,7 @@ export class WebScraper {
       }
       
       // Navigate to the page
-      const response = await page.goto(url, { waitUntil: 'networkidle' });
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
       
       // Check if we detected a redirect when followRedirects is false
       if (!this.options.followRedirects && redirectInfo) {
@@ -157,7 +157,7 @@ export class WebScraper {
         });
       }
       
-      const response = await page.goto(url, { waitUntil: 'networkidle' });
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
       
       // Check if we detected a redirect when followRedirects is false
       if (!this.options.followRedirects && redirectInfo) {
