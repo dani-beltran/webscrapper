@@ -84,7 +84,7 @@ export class WebScraper {
       
       // Wait for specific selector if provided
       if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector).catch(() => {
+        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch(() => {
           throw new SelectorTimeoutError([this.options.waitForSelector], url);
         });
       }
@@ -168,7 +168,7 @@ export class WebScraper {
       }
       
       if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector).catch(() => {
+        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch(() => {
           throw new SelectorTimeoutError([this.options.waitForSelector], url);
         });
       }
