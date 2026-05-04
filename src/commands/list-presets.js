@@ -2,11 +2,13 @@
 
 import { ConfigurableScraper } from '../configurable-scraper.js';
 
+main();
+
 /**
  * List all available configuration presets
  * This command displays all preset names defined in config.json
  */
-export async function listPresets() {
+async function listPresets() {
   const presets = ConfigurableScraper.listPresets();
   
   console.log('\n📋 Available configuration presets:');
@@ -60,9 +62,4 @@ Example:
     console.error(`❌ Error: ${error.message}`);
     process.exit(1);
   }
-}
-
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
 }

@@ -4,6 +4,8 @@ import { WebScraper, RedirectError } from '../scraper.js';
 import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
 
+main().catch(console.error);
+
 function showHelp() {
   console.log(`
 🕷️  Web Scraper CLI
@@ -680,14 +682,3 @@ async function handleConfigScrapeCommand(args) {
   await scraper.close();
   console.log('\n✅ Scraping completed successfully!');
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
-}
-
-export { 
-  main as scrapeCommand,
-  handleSingleMode as singleScrapeCommand,
-  handleBulkMode as bulkScrapeCommand,
-  handleConfigMode as configScrapeCommand
-};

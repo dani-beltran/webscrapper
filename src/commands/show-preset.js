@@ -2,11 +2,13 @@
 
 import { ConfigurableScraper } from '../configurable-scraper.js';
 
+main();
+
 /**
  * Show configuration details for a specific preset
  * @param {string} presetName - The name of the preset to display
  */
-export async function showPreset(presetName) {
+async function showPreset(presetName) {
   if (!presetName) {
     console.error('❌ Please specify a preset name');
     console.log('\n💡 Available presets:');
@@ -83,7 +85,3 @@ Examples:
   }
 }
 
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
