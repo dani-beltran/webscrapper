@@ -24,7 +24,8 @@ Options:
   --help, -h                - Show this help message
   --preset <name>           - Use configuration preset (triggers config mode)
   --group-by <selector>     - CSS selector to group structured results by sections
-  
+  --wait-for-selector <sel> - Wait for a CSS selector to appear before scraping
+
 
 Bulk Mode Options (when multiple URLs or --file used):
   --format <json|txt|csv>   - Output format (default: json)
@@ -140,7 +141,8 @@ async function handleSingleMode(args) {
     outputFile: null,
     groupBy: [],
     followPermanentRedirect: true,
-    followTemporaryRedirect: true
+    followTemporaryRedirect: true,
+    waitForSelector: null
   };
 
   // Parse arguments
@@ -173,6 +175,9 @@ async function handleSingleMode(args) {
       case '--group-by':
         options.groupBy.push(args[++i]);
         options.structured = true; // Auto-enable structured mode when grouping
+        break;
+      case '--wait-for-selector':
+        options.waitForSelector = args[++i];
         break;
       case '--preset':
         // Skip preset handling in single mode - this should be handled by mode detection
@@ -213,7 +218,8 @@ async function handleSingleMode(args) {
     timeout: options.timeout,
     followPermanentRedirect: options.followPermanentRedirect,
     followTemporaryRedirect: options.followTemporaryRedirect,
-    sectionSelectors: options.groupBy
+    sectionSelectors: options.groupBy,
+    waitForSelector: options.waitForSelector
   });
 
   let result;
@@ -311,7 +317,8 @@ async function handleBulkMode(args) {
     browser: 'chromium',
     timeout: 30000,
     followPermanentRedirect: true,
-    followTemporaryRedirect: true
+    followTemporaryRedirect: true,
+    waitForSelector: null
   };
   let bulkOptions = {
     structured: false,
@@ -361,6 +368,9 @@ async function handleBulkMode(args) {
         break;
       case '--no-follow-temporary-redirect':
         scraperOptions.followTemporaryRedirect = false;
+        break;
+      case '--wait-for-selector':
+        scraperOptions.waitForSelector = args[++i];
         break;
       default:
         if (subMode === 'urls' && !args[i].startsWith('--')) {
@@ -534,6 +544,9 @@ async function handleConfigScrapeCommand(args) {
         break;
       case '--group-by':
         options.groupBy.push(args[++i]);
+        break;
+      case '--wait-for-selector':
+        options.customOptions.waitForSelector = args[++i];
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {
