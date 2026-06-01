@@ -3,6 +3,10 @@
   "version": "2.2.1",
   "description": "A web scraper using Playwright to extract all text content from websites",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=11.10.0"
+  },
   "bin": {
     "webscrapper": "src/commands/scrape.js"
   },
