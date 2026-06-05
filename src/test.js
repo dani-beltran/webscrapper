@@ -1,11 +1,27 @@
-import { WebScraper } from './scraper.js';
+import { WebScraper, InteractionStepError } from './scraper.js';
 import { SectionNotFoundError } from './errors/index.js';
+import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { pathToFileURL } from 'url';
 
 async function runTests() {
   console.log('🧪 Running Web Scraper Tests...\n');
 
   let passed = 0;
   let failed = 0;
+  const testDir = mkdtempSync(join(tmpdir(), 'webscrapper-tests-'));
+  const interactionFixturePath = join(testDir, 'interaction-fixture.html');
+  writeFileSync(interactionFixturePath, `<!doctype html>
+<html>
+  <body>
+    <button id="expand" onclick="document.querySelector('#content').textContent='Expanded content visible';">Expand</button>
+    <div id="content">Collapsed</div>
+    <div id="info" onmouseover="document.querySelector('#hover-output').textContent='Hovered details';">Info</div>
+    <div id="hover-output">No hover yet</div>
+  </body>
+</html>`);
+  const interactionFixtureUrl = pathToFileURL(interactionFixturePath).href;
 
   const test = async (name, testFn) => {
     try {
@@ -223,6 +239,66 @@ async function runTests() {
     }
   });
 
+  // Test 13: Required interaction step fails fast
+  await test('Required interaction step fails fast', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      interactionSteps: [{ event: 'click', target: '#does-not-exist' }]
+    });
+
+    try {
+      await scraper.scrapeText(interactionFixtureUrl);
+      throw new Error('Should have thrown InteractionStepError');
+    } catch (error) {
+      if (!(error instanceof InteractionStepError)) {
+        throw new Error(`Expected InteractionStepError, got ${error.constructor.name}: ${error.message}`);
+      }
+      if (error.stepIndex !== 0) throw new Error('Step index should be 0');
+      if (error.event !== 'click') throw new Error('Error event should be click');
+    } finally {
+      await scraper.close();
+    }
+  });
+
+  // Test 14: Optional interaction step is skipped with warning
+  await test('Optional interaction step skip with warning', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      interactionSteps: [{ event: 'click', target: '#does-not-exist', required: false }]
+    });
+
+    const result = await scraper.scrapeText(interactionFixtureUrl);
+    if (!Array.isArray(result.interactionWarnings)) {
+      throw new Error('interactionWarnings should be an array');
+    }
+    if (result.interactionWarnings.length !== 1) {
+      throw new Error('Should contain exactly one interaction warning');
+    }
+
+    await scraper.close();
+  });
+
+  // Test 15: Interaction steps execute in order before scraping
+  await test('Interaction steps execute before scraping', async () => {
+    const scraper = new WebScraper({
+      headless: true,
+      interactionSteps: [
+        { event: 'click', target: '#expand', wait: 100 },
+        { event: 'mouseover', target: '#info' }
+      ]
+    });
+
+    const result = await scraper.scrapeText(interactionFixtureUrl);
+    if (!result.text.includes('Expanded content visible')) {
+      throw new Error('Expected expanded content to be present after click step');
+    }
+    if (!result.text.includes('Hovered details')) {
+      throw new Error('Expected hover content to be present after mouseover step');
+    }
+
+    await scraper.close();
+  });
+
   console.log('📊 Test Results:');
   console.log(`✅ Passed: ${passed}`);
   console.log(`❌ Failed: ${failed}`);
@@ -233,6 +309,8 @@ async function runTests() {
   } else {
     console.log('\n⚠️  Some tests failed. Please check the errors above.');
   }
+
+  rmSync(testDir, { recursive: true, force: true });
 }
 
 // Run tests if this file is executed directly

@@ -27,6 +27,7 @@ Options:
   --preset <name>           - Use configuration preset (triggers config mode)
   --group-by <selector>     - CSS selector to group structured results by sections
   --wait-for-selector <sel> - Wait for a CSS selector to appear before scraping
+  --interaction-steps-file <path> - JSON file with interaction steps to run before scraping
 
 
 Bulk Mode Options (when multiple URLs or --file used):
@@ -39,6 +40,7 @@ Examples:
   node src/scrape.js "https://example.com"
   node src/scrape.js --structured "https://news-site.com"
   node src/scrape.js --group-by "article" "https://news-site.com"
+  node src/scrape.js --interaction-steps-file interactions.json "https://example.com"
   
   # Bulk scraping
   node src/scrape.js "https://example.com" "https://google.com"
@@ -47,6 +49,36 @@ Examples:
   # Configuration-based scraping
   node src/scrape.js --preset news "https://news-site.com"
 `);
+}
+
+async function readInteractionStepsFromFile(filePath) {
+  const fs = await import('fs');
+
+  let fileContent;
+  try {
+    fileContent = fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    throw new Error(`Could not read interaction steps file "${filePath}": ${error.message}`);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(fileContent);
+  } catch (error) {
+    throw new Error(`Invalid JSON in interaction steps file "${filePath}": ${error.message}`);
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Interaction steps file "${filePath}" must contain a JSON array`);
+  }
+
+  parsed.forEach((step, index) => {
+    if (step === null || typeof step !== 'object' || Array.isArray(step)) {
+      throw new Error(`Interaction step at index ${index} must be an object`);
+    }
+  });
+
+  return parsed;
 }
 
 async function main() {
@@ -144,7 +176,8 @@ async function handleSingleMode(args) {
     groupBy: [],
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
-    waitForSelector: null
+    waitForSelector: null,
+    interactionSteps: []
   };
 
   // Parse arguments
@@ -181,6 +214,9 @@ async function handleSingleMode(args) {
       case '--wait-for-selector':
         options.waitForSelector = args[++i];
         break;
+      case '--interaction-steps-file':
+        options.interactionSteps = await readInteractionStepsFromFile(args[++i]);
+        break;
       case '--preset':
         // Skip preset handling in single mode - this should be handled by mode detection
         i++; // Skip the preset name
@@ -208,11 +244,17 @@ async function handleSingleMode(args) {
   }
 
   console.log(`🚀 Scraping: ${url}`);
-  console.log(`🔧 Browser: ${options.browser}, Headless: ${options.headless}, Structured: ${options.structured}`);
-  console.log(`🔄 Follow Permanent Redirects: ${options.followPermanentRedirect}, Follow Temporary Redirects: ${options.followTemporaryRedirect}`);
-  if (options.groupBy.length > 0) {
-    console.log(`📦 Grouping by selector: ${options.groupBy}`);
-  }
+  console.log(`🔧 Settings:
+    🌎 Browser: ${options.browser} in ${options.headless ? 'Headless' : 'Headful'} mode
+    🔄 Follow Permanent Redirects: ${options.followPermanentRedirect}
+    🔄 Follow Temporary Redirects: ${options.followTemporaryRedirect}
+    ⏰ Timeout: ${options.timeout}ms
+    💾 Output ${options.outputFile ? `file: ${options.outputFile}` : `in console`}
+    ${options.structured ? '📊 Structured mode enabled' : '📝 Plain text mode'}
+    📦 Grouping by selector: ${options.groupBy.join(', ') || 'None'}
+    ⏳ Waiting for selector: ${options.waitForSelector || 'None'}
+    🤖 Will execute ${options.interactionSteps.length} interaction steps before scraping
+  `);
   
   const scraper = new WebScraper({
     browser: options.browser,
@@ -221,7 +263,8 @@ async function handleSingleMode(args) {
     followPermanentRedirect: options.followPermanentRedirect,
     followTemporaryRedirect: options.followTemporaryRedirect,
     sectionSelectors: options.groupBy,
-    waitForSelector: options.waitForSelector
+    waitForSelector: options.waitForSelector,
+    interactionSteps: options.interactionSteps
   });
 
   let result;
@@ -320,7 +363,8 @@ async function handleBulkMode(args) {
     timeout: 30000,
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
-    waitForSelector: null
+    waitForSelector: null,
+    interactionSteps: null
   };
   let bulkOptions = {
     structured: false,
@@ -373,6 +417,9 @@ async function handleBulkMode(args) {
         break;
       case '--wait-for-selector':
         scraperOptions.waitForSelector = args[++i];
+        break;
+      case '--interaction-steps-file':
+        scraperOptions.interactionSteps = await readInteractionStepsFromFile(args[++i]);
         break;
       default:
         if (subMode === 'urls' && !args[i].startsWith('--')) {
@@ -549,6 +596,9 @@ async function handleConfigScrapeCommand(args) {
         break;
       case '--wait-for-selector':
         options.customOptions.waitForSelector = args[++i];
+        break;
+      case '--interaction-steps-file':
+        options.customOptions.interactionSteps = await readInteractionStepsFromFile(args[++i]);
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {

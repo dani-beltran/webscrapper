@@ -10,6 +10,7 @@ A production-ready web scraping solution built with Playwright that extracts tex
 - **Structured extraction** - Headings, paragraphs, links, lists, images
 - **Bulk processing** - Scrape multiple URLs efficiently with rate limiting
 - **Configuration presets** - Optimized for news, blogs, docs, e-commerce
+- **Pre-scrape interactions** - Run Playwright interaction steps before extraction
 - **Multiple output formats** - JSON, TXT, CSV
 - **Content grouping** - Group results by CSS selectors
 - **Error handling** - Robust error recovery and retry mechanisms
@@ -46,6 +47,9 @@ npm run scrape "https://example.com" -- --structured
 
 # Group content by sections
 npm run scrape "https://news-site.com" -- --structured --group-by "article"
+
+# Run interaction steps from file before scraping
+npm run scrape "https://example.com" -- --interaction-steps-file interactions.json
 
 # Use different browser
 npm run scrape "https://example.com" -- --browser firefox
@@ -108,7 +112,11 @@ const customScraper = new WebScraper({
   waitUntil: 'domcontentloaded',   // Navigation wait strategy (default: 'domcontentloaded')
   excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
   followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
-  followTemporaryRedirect: false   // Don't follow temporary redirects 302/303/307 (default: true)
+  followTemporaryRedirect: false,  // Don't follow temporary redirects 302/303/307 (default: true)
+  interactionSteps: [
+    { event: 'click', target: '#expand', wait: 1000 },
+    { event: 'mouseover', target: '#info', required: false }
+  ]
 });
 
 // Structured extraction
@@ -156,6 +164,35 @@ const results = await bulkScraper.scrapeUrls(urls, {
 ```
 
 ## 🎯 Advanced Features
+
+### Pre-scrape Interaction Steps
+
+Run a sequence of browser interactions after navigation and optional `waitForSelector`, before the scraper extracts content.
+
+```json
+[
+  { "event": "click", "target": "#expand", "wait": 1000 },
+  { "event": "mouseover", "target": "#info", "required": false }
+]
+```
+
+Use with CLI:
+
+```bash
+npm run scrape "https://example.com" -- --interaction-steps-file interactions.json
+```
+
+Supported events: `click`, `dblclick`, `mouseover`, `hover`, `focus`, `fill`, `type`, `press`
+
+Each step supports:
+- `event` (required)
+- `target` (required, CSS selector)
+- `required` (optional, default `true`)
+- `wait` (optional milliseconds to wait after event)
+- `timeout` (optional override for that step)
+- `value` (optional; used by `fill`, `type`, and `press` where `press` requires non-empty key)
+
+When a non-required step fails, scraping continues and the result includes `interactionWarnings`.
 
 ### Redirect Handling
 
@@ -295,6 +332,7 @@ npm run scrape "URL" --browser firefox        # Use Firefox
 npm run scrape "URL" --no-headless            # Show browser
 npm run scrape "URL" --timeout 60000          # 60s timeout
 npm run scrape "URL" --group-by "selector"    # Group content
+npm run scrape "URL" --interaction-steps-file interactions.json
 
 # Bulk operations
 npm run scrape "URL1" "URL2"                  # Multiple URLs

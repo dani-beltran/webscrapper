@@ -7,6 +7,7 @@ export declare class SectionNotFoundError extends Error {
   selectors: string | string[];
   url: string;
   timestamp: string;
+  bodyText?: string;
   
-  constructor(selectors: string | string[], url: string);
+  constructor(selectors: string | string[], url: string, bodyText?: string);
 }

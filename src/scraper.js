@@ -2,8 +2,9 @@ import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
 import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
 import { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
+import { InteractionStepError } from './errors/InteractionStepError.js';
 
-export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
+export { RedirectError, SectionNotFoundError, SelectorTimeoutError, InteractionStepError };
 
 export class WebScraper {
   constructor(options = {}) {
@@ -17,10 +18,89 @@ export class WebScraper {
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       followPermanentRedirect: options.followPermanentRedirect !== false,
-      followTemporaryRedirect: options.followTemporaryRedirect !== false
+      followTemporaryRedirect: options.followTemporaryRedirect !== false,
+      interactionSteps: Array.isArray(options.interactionSteps) ? options.interactionSteps : []
     };
     this.browser = null;
     this.context = null;
+  }
+
+  async executeInteractionStep(page, step) {
+    const event = (step.event || '').toLowerCase();
+    const timeout = Number.isFinite(step.timeout) ? step.timeout : this.options.timeout;
+    const waitMs = step.wait;
+
+    if (!step.target) {
+      throw new Error('Interaction step target is required');
+    }
+
+    if (!event) {
+      throw new Error('Interaction step event is required');
+    }
+
+    switch (event) {
+      case 'click':
+        await page.click(step.target, { timeout });
+        break;
+      case 'dblclick':
+        await page.dblclick(step.target, { timeout });
+        break;
+      case 'mouseover':
+      case 'hover':
+        await page.hover(step.target, { timeout });
+        break;
+      case 'focus':
+        await page.focus(step.target, { timeout });
+        break;
+      case 'fill':
+        await page.fill(step.target, step.value ?? '', { timeout });
+        break;
+      case 'type':
+        await page.type(step.target, step.value ?? '', { timeout });
+        break;
+      case 'press':
+        if (typeof step.value !== 'string' || step.value.length === 0) {
+          throw new Error('Press event requires a non-empty value (key)');
+        }
+        await page.press(step.target, step.value, { timeout });
+        break;
+      default:
+        throw new Error(`Unsupported interaction event: ${step.event}`);
+    }
+
+    if (waitMs !== undefined) {
+      if (!Number.isFinite(waitMs) || waitMs < 0) {
+        throw new Error(`Invalid interaction wait value: ${waitMs}`);
+      }
+      await page.waitForTimeout(waitMs);
+    }
+  }
+
+  async executeInteractionSteps(page, url) {
+    const warnings = [];
+
+    for (let index = 0; index < this.options.interactionSteps.length; index++) {
+      const step = this.options.interactionSteps[index];
+      const required = step?.required !== false;
+
+      try {
+        await this.executeInteractionStep(page, step);
+      } catch (error) {
+        if (required) {
+          throw new InteractionStepError(index, step?.event, step?.target, url, error);
+        }
+
+        warnings.push({
+          stepIndex: index,
+          event: step?.event || 'unknown',
+          target: step?.target || 'unknown',
+          message: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    return warnings;
   }
 
   async init() {
@@ -88,6 +168,8 @@ export class WebScraper {
           throw new SelectorTimeoutError([this.options.waitForSelector], url);
         });
       }
+
+      const interactionWarnings = await this.executeInteractionSteps(page, url);
       
       // Remove excluded elements
       for (const selector of this.options.excludeSelectors) {
@@ -126,7 +208,8 @@ export class WebScraper {
         url,
         text: textContent,
         length: textContent.length,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...(interactionWarnings.length > 0 ? { interactionWarnings } : {})
       };
       
     } catch (error) {
@@ -172,6 +255,8 @@ export class WebScraper {
           throw new SelectorTimeoutError([this.options.waitForSelector], url);
         });
       }
+
+      const interactionWarnings = await this.executeInteractionSteps(page, url);
 
       // Extract structured content
       const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelectors }) => {
@@ -305,7 +390,7 @@ export class WebScraper {
             });
           } else {
             // No sections found with any of the selectors
-            return { error: 'SECTIONS_NOT_FOUND', selectors: sectionSelectors };
+            return { error: 'SECTIONS_NOT_FOUND', selectors: sectionSelectors, bodyText: document.body.innerText.trim() };
           }
         } else {
           // No section selectors provided, extract from entire document
@@ -321,7 +406,7 @@ export class WebScraper {
       // Check if sections were not found
       if (structuredContent.error === 'SECTIONS_NOT_FOUND') {
         await page.close();
-        throw new SectionNotFoundError(structuredContent.selectors, url);
+        throw new SectionNotFoundError(structuredContent.selectors, url, structuredContent.bodyText);
       }
       
       await page.close();
@@ -329,7 +414,8 @@ export class WebScraper {
       return {
         url,
         ...structuredContent,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...(interactionWarnings.length > 0 ? { interactionWarnings } : {})
       };
       
     } catch (error) {

@@ -8,7 +8,10 @@ export type {
   LinkData,
   ListData,
   StructuredData,
-  SectionData
+  SectionData,
+  InteractionStep,
+  InteractionWarning,
+  InteractionEvent
 } from './scraper.js';
 
 export { BulkScraper } from './bulk-scraper.js';
