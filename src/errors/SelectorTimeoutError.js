@@ -3,12 +3,13 @@
  * Thrown when a selector times out while waiting
  */
 export class SelectorTimeoutError extends Error {
-  constructor(selectors, url) {
+  constructor(selectors, url, bodyText = '') {
     const selectorList = Array.isArray(selectors) ? selectors.join(', ') : selectors;
     super(`Timeout waiting for selector(s): ${selectorList}`);
     this.name = 'SelectorTimeoutError';
     this.selectors = selectors;
     this.url = url;
+    this.bodyText = bodyText;
     this.timestamp = new Date().toISOString();
     
     // Maintains proper stack trace for where our error was thrown (only available on V8)

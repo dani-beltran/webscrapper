@@ -25,6 +25,41 @@ export class WebScraper {
     this.context = null;
   }
 
+  isExecutionContextDestroyedError(error) {
+    return typeof error?.message === 'string' && error.message.includes('Execution context was destroyed');
+  }
+
+  async waitForPageToSettle(page, attempts = 3) {
+    let previousUrl = null;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      await page.waitForLoadState('domcontentloaded');
+
+      const currentUrl = page.url();
+      await page.waitForTimeout(250);
+
+      if (currentUrl === page.url() && currentUrl === previousUrl) {
+        return;
+      }
+
+      previousUrl = currentUrl;
+    }
+  }
+
+  async runOnStablePage(page, callback, retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      await this.waitForPageToSettle(page);
+
+      try {
+        return await callback();
+      } catch (error) {
+        if (!this.isExecutionContextDestroyedError(error) || attempt === retries) {
+          throw error;
+        }
+      }
+    }
+  }
+
   async executeInteractionStep(page, step) {
     const event = (step.event || '').toLowerCase();
     const timeout = Number.isFinite(step.timeout) ? step.timeout : this.options.timeout;
@@ -136,8 +171,9 @@ export class WebScraper {
       page.setDefaultTimeout(this.options.timeout);
       
       let redirectInfo = null;
+      let bodyText = '';
       if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
-        page.on('response', (response) => {
+        page.on('response', async (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
             const status = response.status();
             const isPermanent = status === 301 || status === 308;
@@ -150,6 +186,8 @@ export class WebScraper {
                 url: response.url()
               };
             }
+          } else {
+            bodyText = await response.text();
           }
         });
       }
@@ -165,7 +203,7 @@ export class WebScraper {
       // Wait for specific selector if provided
       if (this.options.waitForSelector) {
         await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch(() => {
-          throw new SelectorTimeoutError([this.options.waitForSelector], url);
+          throw new SelectorTimeoutError([this.options.waitForSelector], url, bodyText);
         });
       }
 
@@ -173,14 +211,14 @@ export class WebScraper {
       
       // Remove excluded elements
       for (const selector of this.options.excludeSelectors) {
-        await page.evaluate((sel) => {
+        await this.runOnStablePage(page, () => page.evaluate((sel) => {
           const elements = document.querySelectorAll(sel);
           elements.forEach(el => el.remove());
-        }, selector);
+        }, selector));
       }
       
       // Extract all text content
-      const textContent = await page.evaluate(() => {
+      const textContent = await this.runOnStablePage(page, () => page.evaluate(() => {
         // Get all text nodes and clean them up
         const walker = document.createTreeWalker(
           document.body,
@@ -200,7 +238,7 @@ export class WebScraper {
         }
         
         return textNodes.join(' ').replace(/\s+/g, ' ').trim();
-      });
+      }));
       
       await page.close();
       
@@ -225,8 +263,9 @@ export class WebScraper {
       page.setDefaultTimeout(this.options.timeout);
       
       let redirectInfo = null;
+      let bodyText = '';
       if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
-        page.on('response', (response) => {
+        page.on('response', async (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
             const status = response.status();
             const isPermanent = status === 301 || status === 308;
@@ -239,6 +278,8 @@ export class WebScraper {
                 url: response.url()
               };
             }
+          } else {
+            bodyText = await response.text();
           }
         });
       }
@@ -251,15 +292,15 @@ export class WebScraper {
       }
       
       if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch(() => {
-          throw new SelectorTimeoutError([this.options.waitForSelector], url);
+        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch((reason) => {
+          throw new SelectorTimeoutError([this.options.waitForSelector], url, bodyText);
         });
       }
 
       const interactionWarnings = await this.executeInteractionSteps(page, url);
 
       // Extract structured content
-      const structuredContent = await page.evaluate(({ excludeSelectors, sectionSelectors }) => {
+      const structuredContent = await this.runOnStablePage(page, () => page.evaluate(({ excludeSelectors, sectionSelectors }) => {
         // Remove excluded elements
         excludeSelectors.forEach(selector => {
           const elements = document.querySelectorAll(selector);
@@ -401,7 +442,7 @@ export class WebScraper {
       }, { 
         excludeSelectors: this.options.excludeSelectors,
         sectionSelectors: this.options.sectionSelectors
-      });
+      }));
       
       // Check if sections were not found
       if (structuredContent.error === 'SECTIONS_NOT_FOUND') {

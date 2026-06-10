@@ -12,6 +12,7 @@ async function runTests() {
   let failed = 0;
   const testDir = mkdtempSync(join(tmpdir(), 'webscrapper-tests-'));
   const interactionFixturePath = join(testDir, 'interaction-fixture.html');
+  const redirectFixturePath = join(testDir, 'redirect-fixture.html');
   writeFileSync(interactionFixturePath, `<!doctype html>
 <html>
   <body>
@@ -21,7 +22,20 @@ async function runTests() {
     <div id="hover-output">No hover yet</div>
   </body>
 </html>`);
+  writeFileSync(redirectFixturePath, `<!doctype html>
+<html>
+  <body>
+    <div id="content">Initial content</div>
+    <script>
+      setTimeout(() => {
+        location.hash = 'settled';
+        document.body.innerHTML = '<div id="content">Settled content</div>';
+      }, 50);
+    </script>
+  </body>
+</html>`);
   const interactionFixtureUrl = pathToFileURL(interactionFixturePath).href;
+  const redirectFixtureUrl = pathToFileURL(redirectFixturePath).href;
 
   const test = async (name, testFn) => {
     try {
@@ -258,6 +272,19 @@ async function runTests() {
     } finally {
       await scraper.close();
     }
+  });
+
+  // Test 14: Late navigation before evaluation is retried
+  await test('Late navigation settles before extraction', async () => {
+    const scraper = new WebScraper({ headless: true });
+
+    const result = await scraper.scrapeText(redirectFixtureUrl);
+
+    if (!result.text.includes('Settled content')) {
+      throw new Error(`Expected settled content, got: ${result.text}`);
+    }
+
+    await scraper.close();
   });
 
   // Test 14: Optional interaction step is skipped with warning
