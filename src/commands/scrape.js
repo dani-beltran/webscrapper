@@ -5,7 +5,7 @@ import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
 import { resolve } from 'path';
 import { pathToFileURL } from 'url';
-import { getErrorMessage } from '../utils.js';
+import { getErrorMessage } from '../utils/get-error-message.js';
 
 main().catch(console.error);
 
