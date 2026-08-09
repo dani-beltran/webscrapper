@@ -355,25 +355,25 @@ Plain text concatenation for simple text output.
 ```bash
 # Basic commands
 npm run scrape "URL"                          # Basic scraping
-npm run scrape "URL" --structured             # Structured extraction
-npm run scrape "URL" --output file.json       # Save to file
+npm run scrape "URL" -- --structured          # Structured extraction
+npm run scrape "URL" -- --output file.json    # Save to file
 
 # Advanced options
-npm run scrape "URL" --browser firefox        # Use Firefox
-npm run scrape "URL" --no-headless            # Show browser
-npm run scrape "URL" --timeout 60000          # 60s timeout
-npm run scrape "URL" --group-by "selector"    # Group content
-npm run scrape "URL" --plugin-file plugin.mjs # Run a pre-scrape plugin
+npm run scrape "URL" -- --browser firefox        # Use Firefox
+npm run scrape "URL" -- --no-headless            # Show browser
+npm run scrape "URL" -- --timeout 60000          # 60s timeout
+npm run scrape "URL" -- --group-by "selector"    # Group content
+npm run scrape "URL" -- --plugin-file plugin.mjs # Run a pre-scrape plugin
 
 # Bulk operations
 npm run scrape "URL1" "URL2"                  # Multiple URLs
-npm run scrape --file urls.txt --batch-size 3 # Custom batching
-npm run scrape --file urls.txt --delay 2000   # 2s delay
+npm run scrape -- --file urls.txt --batch-size 3 # Custom batching
+npm run scrape -- --file urls.txt --delay 2000   # 2s delay
 
 # Preset operations
 npm run list-presets                          # List presets
 npm run show-preset news                      # Show preset config
-npm run scrape --preset news "URL"            # Use preset
+npm run scrape -- --preset news "URL"         # Use preset
 ```
 
 ## Migrating from v2 to v3
