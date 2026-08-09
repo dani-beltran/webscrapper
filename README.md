@@ -193,7 +193,7 @@ plugin: async (page) => {
 }
 ```
 
-For CLI usage, create an `.mjs` ES module whose default export is the plugin function. The `.mjs` extension keeps the plugin in ESM format even when the webscrapper uses `"type": "commonjs"`:
+For CLI usage, create an `.mjs` ES module whose default export is the plugin function. The `.mjs` extension keeps the plugin in ESM format even when your project uses `"type": "commonjs"`:
 
 ```javascript
 // plugin.mjs
