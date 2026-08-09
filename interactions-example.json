@@ -1,4 +1,0 @@
-[
-  { "event": "click", "target": "#expand", "wait": 1000 },
-  { "event": "mouseover", "target": "#expanded", "required": false }
-]

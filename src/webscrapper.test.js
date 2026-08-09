@@ -1,4 +1,4 @@
-import { WebScraper, InteractionStepError } from './scraper.js';
+import { WebScraper } from './scraper.js';
 import { SectionNotFoundError } from './errors/index.js';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -11,9 +11,9 @@ async function runTests() {
   let passed = 0;
   let failed = 0;
   const testDir = mkdtempSync(join(tmpdir(), 'webscrapper-tests-'));
-  const interactionFixturePath = join(testDir, 'interaction-fixture.html');
+  const pluginFixturePath = join(testDir, 'plugin-fixture.html');
   const redirectFixturePath = join(testDir, 'redirect-fixture.html');
-  writeFileSync(interactionFixturePath, `<!doctype html>
+  writeFileSync(pluginFixturePath, `<!doctype html>
 <html>
   <body>
     <button id="expand" onclick="document.querySelector('#content').textContent='Expanded content visible';">Expand</button>
@@ -34,7 +34,7 @@ async function runTests() {
     </script>
   </body>
 </html>`);
-  const interactionFixtureUrl = pathToFileURL(interactionFixturePath).href;
+  const pluginFixtureUrl = pathToFileURL(pluginFixturePath).href;
   const redirectFixtureUrl = pathToFileURL(redirectFixturePath).href;
 
   const test = async (name, testFn) => {
@@ -253,22 +253,76 @@ async function runTests() {
     }
   });
 
-  // Test 13: Required interaction step fails fast
-  await test('Required interaction step fails fast', async () => {
+  // Test 13: Plugin failures propagate unchanged
+  await test('Plugin failures propagate unchanged', async () => {
+    const pluginError = new Error('Plugin failed');
+    let pluginPage = null;
     const scraper = new WebScraper({
       headless: true,
-      interactionSteps: [{ event: 'click', target: '#does-not-exist' }]
+      plugin: async (page) => {
+        pluginPage = page;
+        if (page.url() !== pluginFixtureUrl) {
+          throw new Error('Plugin should run after navigation');
+        }
+        throw pluginError;
+      }
     });
 
     try {
-      await scraper.scrapeText(interactionFixtureUrl);
-      throw new Error('Should have thrown InteractionStepError');
+      await scraper.scrapeText(pluginFixtureUrl);
+      throw new Error('Should have propagated the plugin error');
     } catch (error) {
-      if (!(error instanceof InteractionStepError)) {
-        throw new Error(`Expected InteractionStepError, got ${error.constructor.name}: ${error.message}`);
+      if (error !== pluginError) throw error;
+      if (!pluginPage?.isClosed()) {
+        throw new Error('Page should close after a plugin failure');
       }
-      if (error.stepIndex !== 0) throw new Error('Step index should be 0');
-      if (error.event !== 'click') throw new Error('Error event should be click');
+    } finally {
+      await scraper.close();
+    }
+  });
+
+  // Test 13.5: Bulk plugin failures always produce a serializable error
+  await test('Bulk mode records arbitrary plugin rejections as failures', async () => {
+    const rejectionCases = [
+      { name: 'string', value: 'plugin rejected', expected: 'plugin rejected' },
+      { name: 'null', value: null },
+      { name: 'undefined', value: undefined },
+      { name: 'empty string', value: '' },
+      { name: 'zero', value: 0, expected: '0' },
+      { name: 'false', value: false, expected: 'false' },
+      { name: 'empty Error', value: new Error('') },
+      { name: 'message object', value: { message: 'object rejection' }, expected: 'object rejection' }
+    ];
+    let rejection;
+    const scraper = new WebScraper({
+      headless: true,
+      plugin: async () => {
+        throw rejection;
+      }
+    });
+
+    try {
+      for (const structured of [false, true]) {
+        for (const rejectionCase of rejectionCases) {
+          rejection = rejectionCase.value;
+          const results = await scraper.scrapeMultiplePages([pluginFixtureUrl], structured);
+          const result = results[0];
+          const mode = structured ? 'structured' : 'plain';
+
+          if (typeof result.error !== 'string' || result.error.length === 0) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection should have a non-empty error`);
+          }
+          if (rejectionCase.expected && result.error !== rejectionCase.expected) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection message was not preserved`);
+          }
+          if (!JSON.stringify(result).includes('"error"')) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection error should be serialized`);
+          }
+          if (results.filter(item => item.error).length !== 1) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection should be counted as failed`);
+          }
+        }
+      }
     } finally {
       await scraper.close();
     }
@@ -287,43 +341,63 @@ async function runTests() {
     await scraper.close();
   });
 
-  // Test 14: Optional interaction step is skipped with warning
-  await test('Optional interaction step skip with warning', async () => {
+  // Test 15: Plugin runs before plain-text extraction
+  await test('Plugin receives Page and runs before text scraping', async () => {
+    let pluginUrl = null;
     const scraper = new WebScraper({
       headless: true,
-      interactionSteps: [{ event: 'click', target: '#does-not-exist', required: false }]
+      plugin: async (page) => {
+        pluginUrl = page.url();
+        await page.click('#expand');
+        await page.hover('#info');
+      }
     });
 
-    const result = await scraper.scrapeText(interactionFixtureUrl);
-    if (!Array.isArray(result.interactionWarnings)) {
-      throw new Error('interactionWarnings should be an array');
+    const result = await scraper.scrapeText(pluginFixtureUrl);
+    if (pluginUrl !== pluginFixtureUrl) {
+      throw new Error('Plugin did not receive the navigated page');
     }
-    if (result.interactionWarnings.length !== 1) {
-      throw new Error('Should contain exactly one interaction warning');
+    if (!result.text.includes('Expanded content visible')) {
+      throw new Error('Expected expanded content to be present after plugin click');
+    }
+    if (!result.text.includes('Hovered details')) {
+      throw new Error('Expected hover content to be present after plugin hover');
     }
 
     await scraper.close();
   });
 
-  // Test 15: Interaction steps execute in order before scraping
-  await test('Interaction steps execute before scraping', async () => {
+  // Test 16: Plugin runs before structured extraction
+  await test('Plugin runs before structured scraping', async () => {
     const scraper = new WebScraper({
       headless: true,
-      interactionSteps: [
-        { event: 'click', target: '#expand', wait: 100 },
-        { event: 'mouseover', target: '#info' }
-      ]
+      plugin: (page) => page.evaluate(() => {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = 'Content added by plugin';
+        document.body.appendChild(paragraph);
+      })
     });
 
-    const result = await scraper.scrapeText(interactionFixtureUrl);
-    if (!result.text.includes('Expanded content visible')) {
-      throw new Error('Expected expanded content to be present after click step');
-    }
-    if (!result.text.includes('Hovered details')) {
-      throw new Error('Expected hover content to be present after mouseover step');
+    const result = await scraper.scrapeTextStructured(pluginFixtureUrl);
+    if (!result.paragraphs.includes('Content added by plugin')) {
+      throw new Error('Expected plugin content in structured result');
     }
 
     await scraper.close();
+  });
+
+  // Test 17: Invalid plugins fail during initialization
+  await test('Plugin option must be a function', async () => {
+    for (const plugin of ['not-a-function', null]) {
+      try {
+        new WebScraper({ plugin });
+        throw new Error('Should have rejected a non-function plugin');
+      } catch (error) {
+        if (!(error instanceof TypeError) || error.message !== 'plugin must be a function') {
+          throw error;
+        }
+      }
+    }
   });
 
   console.log('📊 Test Results:');

@@ -10,7 +10,7 @@ A production-ready web scraping solution built with Playwright that extracts tex
 - **Structured extraction** - Headings, paragraphs, links, lists, images
 - **Bulk processing** - Scrape multiple URLs efficiently with rate limiting
 - **Configuration presets** - Optimized for news, blogs, docs, e-commerce
-- **Pre-scrape interactions** - Run Playwright interaction steps before extraction
+- **Pre-scrape plugins** - Run custom Playwright code before extraction
 - **Multiple output formats** - JSON, TXT, CSV
 - **Content grouping** - Group results by CSS selectors
 - **Error handling** - Robust error recovery and retry mechanisms
@@ -48,8 +48,8 @@ npm run scrape "https://example.com" -- --structured
 # Group content by sections
 npm run scrape "https://news-site.com" -- --structured --group-by "article"
 
-# Run interaction steps from file before scraping
-npm run scrape "https://example.com" -- --interaction-steps-file interactions.json
+# Run a JavaScript plugin before scraping
+npm run scrape "https://example.com" -- --plugin-file plugin-example.js
 
 # Use different browser
 npm run scrape "https://example.com" -- --browser firefox
@@ -113,10 +113,11 @@ const customScraper = new WebScraper({
   excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
   followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
   followTemporaryRedirect: false,  // Don't follow temporary redirects 302/303/307 (default: true)
-  interactionSteps: [
-    { event: 'click', target: '#expand', wait: 1000 },
-    { event: 'mouseover', target: '#info', required: false }
-  ]
+  plugin: async (page) => {
+    await page.click('a');
+    await page.waitForTimeout(1000);
+    await page.hover('#example-domains');
+  }
 });
 
 // Structured extraction
@@ -165,34 +166,64 @@ const results = await bulkScraper.scrapeUrls(urls, {
 
 ## 🎯 Advanced Features
 
-### Pre-scrape Interaction Steps
+### Pre-scrape Plugin
 
-Run a sequence of browser interactions after navigation and optional `waitForSelector`, before the scraper extracts content.
+Pass a `plugin` function to run custom Playwright code on every URL. The function receives the real Playwright [`Page`](https://playwright.dev/docs/api/class-page) object and can click controls, fill forms, wait for dynamic content, navigate, or modify the DOM.
 
-```json
-[
-  { "event": "click", "target": "#expand", "wait": 1000 },
-  { "event": "mouseover", "target": "#info", "required": false }
-]
+```javascript
+const scraper = new WebScraper({
+  plugin: async (page) => {
+    await page.getByRole('button', { name: 'Accept cookies' }).click();
+    await page.fill('#search', 'Playwright');
+    await page.press('#search', 'Enter');
+    await page.waitForSelector('.search-results');
+  }
+});
 ```
 
-Use with CLI:
+The plugin is awaited once per scraped URL, after `page.goto()` and any configured `waitForSelector`, but before excluded elements are removed and content is extracted. If it throws, that scrape fails with the same error. Handle optional actions inside the plugin when they should not abort scraping:
+
+```javascript
+plugin: async (page) => {
+  try {
+    await page.click('#optional-banner-close', { timeout: 2000 });
+  } catch {
+    // The banner was not present; continue scraping.
+  }
+}
+```
+
+For CLI usage, create an `.mjs` ES module whose default export is the plugin function. The `.mjs` extension keeps the plugin in ESM format even when your project uses `"type": "commonjs"`:
+
+```javascript
+// plugin.mjs
+export default async function plugin(page) {
+  await page.click('#expand');
+  await page.waitForTimeout(1000);
+}
+```
+
+For CommonJS, create a `.cjs` file and assign the plugin function directly to `module.exports`:
+
+```javascript
+// plugin.cjs
+module.exports = async function plugin(page) {
+  await page.click('#expand');
+  await page.waitForTimeout(1000);
+};
+```
+
+Then pass either trusted local script with `--plugin-file`:
 
 ```bash
-npm run scrape "https://example.com" -- --interaction-steps-file interactions.json
+# ES module
+npm run scrape "https://example.com" -- --plugin-file ./plugin.mjs
+
+# CommonJS
+npm run scrape "https://example.com" -- --plugin-file ./plugin.cjs
 ```
 
-Supported events: `click`, `dblclick`, `mouseover`, `hover`, `focus`, `fill`, `type`, `press`
-
-Each step supports:
-- `event` (required)
-- `target` (required, CSS selector)
-- `required` (optional, default `true`)
-- `wait` (optional milliseconds to wait after event)
-- `timeout` (optional override for that step)
-- `value` (optional; used by `fill`, `type`, and `press` where `press` requires non-empty key)
-
-When a non-required step fails, scraping continues and the result includes `interactionWarnings`.
+Plugin files execute as local JavaScript with the permissions of the CLI process, so only load code you trust.
 
 ### Redirect Handling
 
@@ -324,25 +355,83 @@ Plain text concatenation for simple text output.
 ```bash
 # Basic commands
 npm run scrape "URL"                          # Basic scraping
-npm run scrape "URL" --structured             # Structured extraction
-npm run scrape "URL" --output file.json       # Save to file
+npm run scrape "URL" -- --structured          # Structured extraction
+npm run scrape "URL" -- --output file.json    # Save to file
 
 # Advanced options
-npm run scrape "URL" --browser firefox        # Use Firefox
-npm run scrape "URL" --no-headless            # Show browser
-npm run scrape "URL" --timeout 60000          # 60s timeout
-npm run scrape "URL" --group-by "selector"    # Group content
-npm run scrape "URL" --interaction-steps-file interactions.json
+npm run scrape "URL" -- --browser firefox        # Use Firefox
+npm run scrape "URL" -- --no-headless            # Show browser
+npm run scrape "URL" -- --timeout 60000          # 60s timeout
+npm run scrape "URL" -- --group-by "selector"    # Group content
+npm run scrape "URL" -- --plugin-file plugin.mjs # Run a pre-scrape plugin
 
 # Bulk operations
 npm run scrape "URL1" "URL2"                  # Multiple URLs
-npm run scrape --file urls.txt --batch-size 3 # Custom batching
-npm run scrape --file urls.txt --delay 2000   # 2s delay
+npm run scrape -- --file urls.txt --batch-size 3 # Custom batching
+npm run scrape -- --file urls.txt --delay 2000   # 2s delay
 
 # Preset operations
 npm run list-presets                          # List presets
 npm run show-preset news                      # Show preset config
-npm run scrape --preset news "URL"            # Use preset
+npm run scrape -- --preset news "URL"         # Use preset
+```
+
+## Migrating from v2 to v3
+
+Version 3.0.0 replaces the declarative `interactionSteps` option with the `plugin` callback. Move each old step into an awaited Playwright call on the supplied `Page`.
+
+Before (v2):
+
+```javascript
+const scraper = new WebScraper({
+  interactionSteps: [
+    { event: 'click', target: '#expand', wait: 1000, timeout: 5000 },
+    { event: 'mouseover', target: '#info', required: false }
+  ]
+});
+```
+
+After (v3):
+
+```javascript
+const scraper = new WebScraper({
+  plugin: async (page) => {
+    await page.click('#expand', { timeout: 5000 });
+    await page.waitForTimeout(1000);
+
+    try {
+      await page.hover('#info');
+    } catch {
+      // Equivalent to required: false.
+    }
+  }
+});
+```
+
+Use these direct equivalents when migrating events:
+
+| v2 event | v3 plugin call |
+|----------|----------------|
+| `click` | `await page.click(target, { timeout })` |
+| `dblclick` | `await page.dblclick(target, { timeout })` |
+| `mouseover` or `hover` | `await page.hover(target, { timeout })` |
+| `focus` | `await page.focus(target, { timeout })` |
+| `fill` | `await page.fill(target, value, { timeout })` |
+| `type` | `await page.locator(target).pressSequentially(value, { timeout })` |
+| `press` | `await page.press(target, value, { timeout })` |
+
+The old `wait` field becomes `await page.waitForTimeout(wait)`, and per-step `timeout` values move into the relevant Playwright call. Wrap optional actions in `try/catch`; v3 no longer returns `interactionWarnings`. The `InteractionStepError`, `InteractionStep`, `InteractionWarning`, and `InteractionEvent` exports have also been removed, and plugin errors now propagate unchanged.
+
+For the CLI, replace the v2 JSON file and flag:
+
+```bash
+npm run scrape "URL" -- --interaction-steps-file interactions.json
+```
+
+with a JavaScript module that default exports the callback and the v3 flag:
+
+```bash
+npm run scrape "URL" -- --plugin-file plugin.mjs
 ```
 
 ## 🚦 Best Practices

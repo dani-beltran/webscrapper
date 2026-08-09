@@ -10,6 +10,11 @@
   "bin": {
     "webscrapper": "src/commands/scrape.js"
   },
+  "files": [
+    "src",
+    "config.json",
+    "plugin-example.js"
+  ],
   "types": "src/index.d.ts",
   "type": "module",
   "private": false,
@@ -18,7 +23,7 @@
     "list-presets": "node src/commands/list-presets.js",
     "show-preset": "node src/commands/show-preset.js",
     "install-browsers": "npx playwright install",
-    "test": "node src/test.js",
+    "test": "node src/webscrapper.test.js",
     "debug": "PWDEBUG=1 node src/commands/scrape.js"
   },
   "keywords": [

@@ -3,6 +3,9 @@
 import { WebScraper, RedirectError } from '../scraper.js';
 import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
+import { resolve } from 'path';
+import { pathToFileURL } from 'url';
+import { getErrorMessage } from '../utils/get-error-message.js';
 
 main().catch(console.error);
 
@@ -27,7 +30,7 @@ Options:
   --preset <name>           - Use configuration preset (triggers config mode)
   --group-by <selector>     - CSS selector to group structured results by sections
   --wait-for-selector <sel> - Wait for a CSS selector to appear before scraping
-  --interaction-steps-file <path> - JSON file with interaction steps to run before scraping
+  --plugin-file <path>      - JavaScript module whose default export runs before scraping
 
 
 Bulk Mode Options (when multiple URLs or --file used):
@@ -37,48 +40,37 @@ Bulk Mode Options (when multiple URLs or --file used):
 
 Examples:
   # Single URL scraping
-  node src/scrape.js "https://example.com"
-  node src/scrape.js --structured "https://news-site.com"
-  node src/scrape.js --group-by "article" "https://news-site.com"
-  node src/scrape.js --interaction-steps-file interactions.json "https://example.com"
+  node src/commands/scrape.js "https://example.com"
+  node src/commands/scrape.js --structured "https://news-site.com"
+  node src/commands/scrape.js --group-by "article" "https://news-site.com"
+  node src/commands/scrape.js --plugin-file plugin-example.js "https://example.com"
   
   # Bulk scraping
-  node src/scrape.js "https://example.com" "https://google.com"
-  node src/scrape.js --file urls.txt --output results.json --structured
+  node src/commands/scrape.js "https://example.com" "https://google.com"
+  node src/commands/scrape.js --file urls.txt --output results.json --structured
   
   # Configuration-based scraping
-  node src/scrape.js --preset news "https://news-site.com"
+  node src/commands/scrape.js --preset news "https://news-site.com"
 `);
 }
 
-async function readInteractionStepsFromFile(filePath) {
-  const fs = await import('fs');
+async function loadPluginFromFile(filePath) {
+  if (!filePath) {
+    throw new Error('Plugin file path is required');
+  }
 
-  let fileContent;
+  let pluginModule;
   try {
-    fileContent = fs.readFileSync(filePath, 'utf-8');
+    pluginModule = await import(pathToFileURL(resolve(filePath)).href);
   } catch (error) {
-    throw new Error(`Could not read interaction steps file "${filePath}": ${error.message}`);
+    throw new Error(`Could not load plugin file "${filePath}": ${getErrorMessage(error)}`);
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(fileContent);
-  } catch (error) {
-    throw new Error(`Invalid JSON in interaction steps file "${filePath}": ${error.message}`);
+  if (typeof pluginModule.default !== 'function') {
+    throw new Error(`Plugin file "${filePath}" must default export a function`);
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error(`Interaction steps file "${filePath}" must contain a JSON array`);
-  }
-
-  parsed.forEach((step, index) => {
-    if (step === null || typeof step !== 'object' || Array.isArray(step)) {
-      throw new Error(`Interaction step at index ${index} must be an object`);
-    }
-  });
-
-  return parsed;
+  return pluginModule.default;
 }
 
 async function main() {
@@ -160,7 +152,7 @@ async function main() {
         process.exit(1);
     }
   } catch (error) {
-    console.error(`❌ Error: ${error.message}`);
+    console.error(`❌ Error: ${getErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -177,7 +169,6 @@ async function handleSingleMode(args) {
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
     waitForSelector: null,
-    interactionSteps: []
   };
 
   // Parse arguments
@@ -214,8 +205,8 @@ async function handleSingleMode(args) {
       case '--wait-for-selector':
         options.waitForSelector = args[++i];
         break;
-      case '--interaction-steps-file':
-        options.interactionSteps = await readInteractionStepsFromFile(args[++i]);
+      case '--plugin-file':
+        options.plugin = await loadPluginFromFile(args[++i]);
         break;
       case '--preset':
         // Skip preset handling in single mode - this should be handled by mode detection
@@ -253,7 +244,7 @@ async function handleSingleMode(args) {
     ${options.structured ? '📊 Structured mode enabled' : '📝 Plain text mode'}
     📦 Grouping by selector: ${options.groupBy.join(', ') || 'None'}
     ⏳ Waiting for selector: ${options.waitForSelector || 'None'}
-    🤖 Will execute ${options.interactionSteps.length} interaction steps before scraping
+    🧩 Pre-scrape plugin: ${options.plugin ? 'Enabled' : 'None'}
   `);
   
   const scraper = new WebScraper({
@@ -264,7 +255,7 @@ async function handleSingleMode(args) {
     followTemporaryRedirect: options.followTemporaryRedirect,
     sectionSelectors: options.groupBy,
     waitForSelector: options.waitForSelector,
-    interactionSteps: options.interactionSteps
+    plugin: options.plugin
   });
 
   let result;
@@ -281,7 +272,7 @@ async function handleSingleMode(args) {
       console.log(`   Status: ${error.status}`);
       console.log(`   Original URL: ${error.originalUrl}`);
       console.log(`   Redirects to: ${error.location}`);
-      console.log(`   Message: ${error.message}`);
+      console.log(`   Message: ${getErrorMessage(error)}`);
       
       // Save redirect info if output file requested
       if (options.outputFile) {
@@ -291,7 +282,7 @@ async function handleSingleMode(args) {
           redirect: true,
           status: error.status,
           location: error.location,
-          message: error.message,
+          message: getErrorMessage(error),
           timestamp: error.timestamp
         };
         fs.writeFileSync(options.outputFile, JSON.stringify(redirectResult, null, 2));
@@ -364,7 +355,6 @@ async function handleBulkMode(args) {
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
     waitForSelector: null,
-    interactionSteps: null
   };
   let bulkOptions = {
     structured: false,
@@ -418,8 +408,8 @@ async function handleBulkMode(args) {
       case '--wait-for-selector':
         scraperOptions.waitForSelector = args[++i];
         break;
-      case '--interaction-steps-file':
-        scraperOptions.interactionSteps = await readInteractionStepsFromFile(args[++i]);
+      case '--plugin-file':
+        scraperOptions.plugin = await loadPluginFromFile(args[++i]);
         break;
       default:
         if (subMode === 'urls' && !args[i].startsWith('--')) {
@@ -497,7 +487,7 @@ async function handleBulkMode(args) {
       console.log(`📋 Found ${fileUrls.length} valid URLs in file`);
       results = await bulkScraper.scrapeUrls(fileUrls, bulkOptions);
     } catch (fileError) {
-      throw new Error(`Failed to read file "${filePath}": ${fileError.message}`);
+      throw new Error(`Failed to read file "${filePath}": ${getErrorMessage(fileError)}`);
     }
   } else if (subMode === 'urls') {
     console.log(`📋 Scraping ${urls.length} provided URLs`);
@@ -597,8 +587,8 @@ async function handleConfigScrapeCommand(args) {
       case '--wait-for-selector':
         options.customOptions.waitForSelector = args[++i];
         break;
-      case '--interaction-steps-file':
-        options.customOptions.interactionSteps = await readInteractionStepsFromFile(args[++i]);
+      case '--plugin-file':
+        options.customOptions.plugin = await loadPluginFromFile(args[++i]);
         break;
       default:
         if (!arg.startsWith('--') && preset === null) {
