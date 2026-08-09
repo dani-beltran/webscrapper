@@ -193,20 +193,34 @@ plugin: async (page) => {
 }
 ```
 
-For CLI usage, create an ES module whose default export is the plugin function:
+For CLI usage, create an `.mjs` ES module whose default export is the plugin function. The `.mjs` extension keeps the plugin in ESM format even when the webscrapper uses `"type": "commonjs"`:
 
 ```javascript
-// plugin.js
+// plugin.mjs
 export default async function plugin(page) {
   await page.click('#expand');
   await page.waitForTimeout(1000);
 }
 ```
 
-Then pass the trusted local script with `--plugin-file`:
+For CommonJS, create a `.cjs` file and assign the plugin function directly to `module.exports`:
+
+```javascript
+// plugin.cjs
+module.exports = async function plugin(page) {
+  await page.click('#expand');
+  await page.waitForTimeout(1000);
+};
+```
+
+Then pass either trusted local script with `--plugin-file`:
 
 ```bash
-npm run scrape "https://example.com" -- --plugin-file ./plugin.js
+# ES module
+npm run scrape "https://example.com" -- --plugin-file ./plugin.mjs
+
+# CommonJS
+npm run scrape "https://example.com" -- --plugin-file ./plugin.cjs
 ```
 
 Plugin files execute as local JavaScript with the permissions of the CLI process, so only load code you trust.
@@ -349,7 +363,7 @@ npm run scrape "URL" --browser firefox        # Use Firefox
 npm run scrape "URL" --no-headless            # Show browser
 npm run scrape "URL" --timeout 60000          # 60s timeout
 npm run scrape "URL" --group-by "selector"    # Group content
-npm run scrape "URL" --plugin-file plugin.js  # Run a pre-scrape plugin
+npm run scrape "URL" --plugin-file plugin.mjs # Run a pre-scrape plugin
 
 # Bulk operations
 npm run scrape "URL1" "URL2"                  # Multiple URLs
@@ -417,7 +431,7 @@ npm run scrape "URL" -- --interaction-steps-file interactions.json
 with a JavaScript module that default exports the callback and the v3 flag:
 
 ```bash
-npm run scrape "URL" -- --plugin-file plugin.js
+npm run scrape "URL" -- --plugin-file plugin.mjs
 ```
 
 ## 🚦 Best Practices
