@@ -9,9 +9,7 @@ export type {
   ListData,
   StructuredData,
   SectionData,
-  InteractionStep,
-  InteractionWarning,
-  InteractionEvent
+  WebScraperPlugin
 } from './scraper.js';
 
 export { BulkScraper } from './bulk-scraper.js';

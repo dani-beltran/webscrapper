@@ -1,34 +1,10 @@
+import type { Page } from 'playwright';
+
 export { RedirectError } from './errors/RedirectError.js';
 export { SectionNotFoundError } from './errors/SectionNotFoundError.js';
 export { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
-export { InteractionStepError } from './errors/InteractionStepError.js';
 
-export type InteractionEvent =
-  | 'click'
-  | 'dblclick'
-  | 'mouseover'
-  | 'hover'
-  | 'focus'
-  | 'fill'
-  | 'type'
-  | 'press';
-
-export interface InteractionStep {
-  event: InteractionEvent;
-  target: string;
-  wait?: number;
-  timeout?: number;
-  value?: string;
-  required?: boolean;
-}
-
-export interface InteractionWarning {
-  stepIndex: number;
-  event: string;
-  target: string;
-  message: string;
-  timestamp: string;
-}
+export type WebScraperPlugin = (page: Page) => void | Promise<void>;
 
 export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
@@ -41,7 +17,8 @@ export interface WebScraperOptions {
   userAgent?: string;
   followPermanentRedirect?: boolean;
   followTemporaryRedirect?: boolean;
-  interactionSteps?: InteractionStep[];
+  /** Runs after navigation and waitForSelector, before content extraction. */
+  plugin?: WebScraperPlugin;
 }
 
 export interface ScrapeTextResult {
@@ -49,7 +26,6 @@ export interface ScrapeTextResult {
   text: string;
   length: number;
   timestamp: string;
-  interactionWarnings?: InteractionWarning[];
 }
 
 export interface LinkData {
@@ -89,7 +65,6 @@ export interface ScrapeStructuredResult extends Partial<StructuredData> {
   title: string;
   timestamp: string;
   sections?: SectionData[];
-  interactionWarnings?: InteractionWarning[];
 }
 
 export interface ScrapeErrorResult {
@@ -108,7 +83,7 @@ export interface ScrapeRedirectResult {
 }
 
 export declare class WebScraper {
-  options: Required<WebScraperOptions>;
+  options: Omit<Required<WebScraperOptions>, 'plugin'> & { plugin: WebScraperPlugin | null };
   browser: any | null;
   context: any | null;
 

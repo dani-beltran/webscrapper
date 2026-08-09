@@ -1,0 +1,35 @@
+{
+  "name": "your-project-name",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^latest-version",
+    "@nuxt/test-utils": "^latest-version"
+  },
+  "vitest": {
+    "environment": "node",
+    "client": {
+      "noExternal": true
+    }
+  }
+}
+
+import { test, expect } from 'vitest';
+
+test('hello world!', () => {
+  expect(1 + 1).toBe(2);
+});
+
+import { test, expect } from 'vitest';
+
+test('new test case', () => {
+  expect(true).toBe(true);
+});
+
+import { test, expect } from 'vitest';
+
+test('hello world!', () => {
+  expect('Hello, World!').toBe('Hello, World!');
+});

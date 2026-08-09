@@ -2,12 +2,15 @@ import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
 import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
 import { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
-import { InteractionStepError } from './errors/InteractionStepError.js';
 
-export { RedirectError, SectionNotFoundError, SelectorTimeoutError, InteractionStepError };
+export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
 
 export class WebScraper {
   constructor(options = {}) {
+    if (options.plugin != null && typeof options.plugin !== 'function') {
+      throw new TypeError('plugin must be a function');
+    }
+
     this.options = {
       browser: options.browser || 'chromium',
       headless: options.headless !== false,
@@ -19,7 +22,7 @@ export class WebScraper {
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       followPermanentRedirect: options.followPermanentRedirect !== false,
       followTemporaryRedirect: options.followTemporaryRedirect !== false,
-      interactionSteps: Array.isArray(options.interactionSteps) ? options.interactionSteps : []
+      plugin: options.plugin || null
     };
     this.browser = null;
     this.context = null;
@@ -60,84 +63,6 @@ export class WebScraper {
     }
   }
 
-  async executeInteractionStep(page, step) {
-    const event = (step.event || '').toLowerCase();
-    const timeout = Number.isFinite(step.timeout) ? step.timeout : this.options.timeout;
-    const waitMs = step.wait;
-
-    if (!step.target) {
-      throw new Error('Interaction step target is required');
-    }
-
-    if (!event) {
-      throw new Error('Interaction step event is required');
-    }
-
-    switch (event) {
-      case 'click':
-        await page.click(step.target, { timeout });
-        break;
-      case 'dblclick':
-        await page.dblclick(step.target, { timeout });
-        break;
-      case 'mouseover':
-      case 'hover':
-        await page.hover(step.target, { timeout });
-        break;
-      case 'focus':
-        await page.focus(step.target, { timeout });
-        break;
-      case 'fill':
-        await page.fill(step.target, step.value ?? '', { timeout });
-        break;
-      case 'type':
-        await page.type(step.target, step.value ?? '', { timeout });
-        break;
-      case 'press':
-        if (typeof step.value !== 'string' || step.value.length === 0) {
-          throw new Error('Press event requires a non-empty value (key)');
-        }
-        await page.press(step.target, step.value, { timeout });
-        break;
-      default:
-        throw new Error(`Unsupported interaction event: ${step.event}`);
-    }
-
-    if (waitMs !== undefined) {
-      if (!Number.isFinite(waitMs) || waitMs < 0) {
-        throw new Error(`Invalid interaction wait value: ${waitMs}`);
-      }
-      await page.waitForTimeout(waitMs);
-    }
-  }
-
-  async executeInteractionSteps(page, url) {
-    const warnings = [];
-
-    for (let index = 0; index < this.options.interactionSteps.length; index++) {
-      const step = this.options.interactionSteps[index];
-      const required = step?.required !== false;
-
-      try {
-        await this.executeInteractionStep(page, step);
-      } catch (error) {
-        if (required) {
-          throw new InteractionStepError(index, step?.event, step?.target, url, error);
-        }
-
-        warnings.push({
-          stepIndex: index,
-          event: step?.event || 'unknown',
-          target: step?.target || 'unknown',
-          message: error.message,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    return warnings;
-  }
-
   async init() {
     if (this.browser) return;
 
@@ -162,10 +87,12 @@ export class WebScraper {
   }
 
   async scrapeText(url) {
+    let page = null;
+
     try {
       await this.init();
       
-      const page = await this.context.newPage();
+      page = await this.context.newPage();
       
       // Set timeout
       page.setDefaultTimeout(this.options.timeout);
@@ -207,7 +134,9 @@ export class WebScraper {
         });
       }
 
-      const interactionWarnings = await this.executeInteractionSteps(page, url);
+      if (this.options.plugin) {
+        await this.options.plugin(page);
+      }
       
       // Remove excluded elements
       for (const selector of this.options.excludeSelectors) {
@@ -246,20 +175,24 @@ export class WebScraper {
         url,
         text: textContent,
         length: textContent.length,
-        timestamp: new Date().toISOString(),
-        ...(interactionWarnings.length > 0 ? { interactionWarnings } : {})
+        timestamp: new Date().toISOString()
       };
       
     } catch (error) {
+      if (page && !page.isClosed()) {
+        await page.close().catch(() => {});
+      }
       throw error;
     }
   }
 
   async scrapeTextStructured(url) {
+    let page = null;
+
     try {
       await this.init();
       
-      const page = await this.context.newPage();
+      page = await this.context.newPage();
       page.setDefaultTimeout(this.options.timeout);
       
       let redirectInfo = null;
@@ -297,7 +230,9 @@ export class WebScraper {
         });
       }
 
-      const interactionWarnings = await this.executeInteractionSteps(page, url);
+      if (this.options.plugin) {
+        await this.options.plugin(page);
+      }
 
       // Extract structured content
       const structuredContent = await this.runOnStablePage(page, () => page.evaluate(({ excludeSelectors, sectionSelectors }) => {
@@ -455,11 +390,13 @@ export class WebScraper {
       return {
         url,
         ...structuredContent,
-        timestamp: new Date().toISOString(),
-        ...(interactionWarnings.length > 0 ? { interactionWarnings } : {})
+        timestamp: new Date().toISOString()
       };
       
     } catch (error) {
+      if (page && !page.isClosed()) {
+        await page.close().catch(() => {});
+      }
       throw error;
     }
   }
