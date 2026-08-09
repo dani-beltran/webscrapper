@@ -281,6 +281,53 @@ async function runTests() {
     }
   });
 
+  // Test 13.5: Bulk plugin failures always produce a serializable error
+  await test('Bulk mode records arbitrary plugin rejections as failures', async () => {
+    const rejectionCases = [
+      { name: 'string', value: 'plugin rejected', expected: 'plugin rejected' },
+      { name: 'null', value: null },
+      { name: 'undefined', value: undefined },
+      { name: 'empty string', value: '' },
+      { name: 'zero', value: 0, expected: '0' },
+      { name: 'false', value: false, expected: 'false' },
+      { name: 'empty Error', value: new Error('') },
+      { name: 'message object', value: { message: 'object rejection' }, expected: 'object rejection' }
+    ];
+    let rejection;
+    const scraper = new WebScraper({
+      headless: true,
+      plugin: async () => {
+        throw rejection;
+      }
+    });
+
+    try {
+      for (const structured of [false, true]) {
+        for (const rejectionCase of rejectionCases) {
+          rejection = rejectionCase.value;
+          const results = await scraper.scrapeMultiplePages([pluginFixtureUrl], structured);
+          const result = results[0];
+          const mode = structured ? 'structured' : 'plain';
+
+          if (typeof result.error !== 'string' || result.error.length === 0) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection should have a non-empty error`);
+          }
+          if (rejectionCase.expected && result.error !== rejectionCase.expected) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection message was not preserved`);
+          }
+          if (!JSON.stringify(result).includes('"error"')) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection error should be serialized`);
+          }
+          if (results.filter(item => item.error).length !== 1) {
+            throw new Error(`${mode} ${rejectionCase.name} rejection should be counted as failed`);
+          }
+        }
+      }
+    } finally {
+      await scraper.close();
+    }
+  });
+
   // Test 14: Late navigation before evaluation is retried
   await test('Late navigation settles before extraction', async () => {
     const scraper = new WebScraper({ headless: true });

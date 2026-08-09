@@ -2,6 +2,7 @@ import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
 import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
 import { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
+import { getErrorMessage } from './utils/get-error-message.js';
 
 export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
 
@@ -435,7 +436,7 @@ export class WebScraper {
         } else {
           results.push({
             url,
-            error: error.message,
+            error: getErrorMessage(error),
             timestamp: new Date().toISOString()
           });
         }
