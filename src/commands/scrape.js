@@ -5,6 +5,7 @@ import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
 import { resolve } from 'path';
 import { pathToFileURL } from 'url';
+import { getErrorMessage } from '../utils.js';
 
 main().catch(console.error);
 
@@ -62,7 +63,7 @@ async function loadPluginFromFile(filePath) {
   try {
     pluginModule = await import(pathToFileURL(resolve(filePath)).href);
   } catch (error) {
-    throw new Error(`Could not load plugin file "${filePath}": ${error.message}`);
+    throw new Error(`Could not load plugin file "${filePath}": ${getErrorMessage(error)}`);
   }
 
   if (typeof pluginModule.default !== 'function') {
@@ -151,7 +152,7 @@ async function main() {
         process.exit(1);
     }
   } catch (error) {
-    console.error(`❌ Error: ${error.message}`);
+    console.error(`❌ Error: ${getErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -168,7 +169,6 @@ async function handleSingleMode(args) {
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
     waitForSelector: null,
-    plugin: null
   };
 
   // Parse arguments
@@ -272,7 +272,7 @@ async function handleSingleMode(args) {
       console.log(`   Status: ${error.status}`);
       console.log(`   Original URL: ${error.originalUrl}`);
       console.log(`   Redirects to: ${error.location}`);
-      console.log(`   Message: ${error.message}`);
+      console.log(`   Message: ${getErrorMessage(error)}`);
       
       // Save redirect info if output file requested
       if (options.outputFile) {
@@ -282,7 +282,7 @@ async function handleSingleMode(args) {
           redirect: true,
           status: error.status,
           location: error.location,
-          message: error.message,
+          message: getErrorMessage(error),
           timestamp: error.timestamp
         };
         fs.writeFileSync(options.outputFile, JSON.stringify(redirectResult, null, 2));
@@ -355,7 +355,6 @@ async function handleBulkMode(args) {
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
     waitForSelector: null,
-    plugin: null
   };
   let bulkOptions = {
     structured: false,
@@ -488,7 +487,7 @@ async function handleBulkMode(args) {
       console.log(`📋 Found ${fileUrls.length} valid URLs in file`);
       results = await bulkScraper.scrapeUrls(fileUrls, bulkOptions);
     } catch (fileError) {
-      throw new Error(`Failed to read file "${filePath}": ${fileError.message}`);
+      throw new Error(`Failed to read file "${filePath}": ${getErrorMessage(fileError)}`);
     }
   } else if (subMode === 'urls') {
     console.log(`📋 Scraping ${urls.length} provided URLs`);
