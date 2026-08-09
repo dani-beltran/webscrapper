@@ -83,7 +83,7 @@ export interface ScrapeRedirectResult {
 }
 
 export declare class WebScraper {
-  options: Omit<Required<WebScraperOptions>, 'plugin'> & { plugin: WebScraperPlugin | null };
+  options: Omit<Required<WebScraperOptions>, 'plugin'> & { plugin?: WebScraperPlugin };
   browser: any | null;
   context: any | null;
 
