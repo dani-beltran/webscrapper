@@ -114,9 +114,9 @@ const customScraper = new WebScraper({
   followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
   followTemporaryRedirect: false,  // Don't follow temporary redirects 302/303/307 (default: true)
   plugin: async (page) => {
-    await page.click('#expand');
+    await page.click('a');
     await page.waitForTimeout(1000);
-    await page.hover('#info');
+    await page.hover('#example-domains');
   }
 });
 
