@@ -8,7 +8,7 @@ export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
 
 export class WebScraper {
   constructor(options = {}) {
-    if (options.plugin != null && typeof options.plugin !== 'function') {
+    if (options.plugin !== undefined && typeof options.plugin !== 'function') {
       throw new TypeError('plugin must be a function');
     }
 

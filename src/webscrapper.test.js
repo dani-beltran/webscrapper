@@ -388,12 +388,14 @@ async function runTests() {
 
   // Test 17: Invalid plugins fail during initialization
   await test('Plugin option must be a function', async () => {
-    try {
-      new WebScraper({ plugin: 'not-a-function' });
-      throw new Error('Should have rejected a non-function plugin');
-    } catch (error) {
-      if (!(error instanceof TypeError) || error.message !== 'plugin must be a function') {
-        throw error;
+    for (const plugin of ['not-a-function', null]) {
+      try {
+        new WebScraper({ plugin });
+        throw new Error('Should have rejected a non-function plugin');
+      } catch (error) {
+        if (!(error instanceof TypeError) || error.message !== 'plugin must be a function') {
+          throw error;
+        }
       }
     }
   });
