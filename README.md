@@ -108,7 +108,6 @@ const customScraper = new WebScraper({
   browser: 'chromium',
   headless: true,
   timeout: 30000,
-  waitForSelector: '.main-content',
   waitUntil: 'domcontentloaded',   // Navigation wait strategy (default: 'domcontentloaded')
   excludeSelectors: ['script', 'style', '.ads', 'nav', 'footer'],
   followPermanentRedirect: false,  // Don't follow permanent redirects 301/308 (default: true)
@@ -124,17 +123,15 @@ const customScraper = new WebScraper({
 const structured = await scraper.scrapeTextStructured('https://example.com');
 console.log(structured.headings, structured.links);
 
-// Multiple section selectors - try multiple CSS selectors
+// Named section groups
 const sectionScraper = new WebScraper({
-  sectionSelectors: ['article', 'section', '.content', 'main']
+  groups: [
+    { selector: 'article', required: true, wait: true, name: 'article' },
+    { selector: '.article-content', required: false, wait: false, name: 'content' }
+  ]
 });
-const sections = await sectionScraper.scrapeTextStructured('https://example.com');
+const sections = await sectionScraper.scrapeTextStructured('https://news-site.com/article');
 console.log(sections.sections); // Array of matched sections
-
-// Override section selectors per request
-const result = await scraper.scrapeTextStructured('https://example.com', {
-  sectionSelectors: ['.post', 'article', '.entry']
-});
 ```
 
 ### Using Presets Programmatically
@@ -181,7 +178,7 @@ const scraper = new WebScraper({
 });
 ```
 
-The plugin is awaited once per scraped URL, after `page.goto()` and any configured `waitForSelector`, but before excluded elements are removed and content is extracted. If it throws, that scrape fails with the same error. Handle optional actions inside the plugin when they should not abort scraping:
+The plugin is awaited once per scraped URL after `page.goto()`, before section groups with `wait` enabled are awaited and content is extracted. If it throws, that scrape fails with the same error. Handle optional actions inside the plugin when they should not abort scraping:
 
 ```javascript
 plugin: async (page) => {
@@ -267,28 +264,32 @@ try {
 - ✅ Validate URL structure without following redirects
 - ✅ Audit SEO redirect configurations
 
-### Multiple Section Selectors
+### Named Section Groups
 
-You can now specify multiple CSS selectors to capture content from different section types. The scraper will try each selector and combine all matching sections.
-Each section in the results will include the selector as id, if there are several matches for the same selector, they will be numbered.
+`groups` accepts objects with a CSS `selector`, a stable output `name`, a `required` flag, and a `wait` flag. `wait` defaults to `true`; set it to `false` to sample the group without a selector-specific wait. `required` defaults to `false`. A missing required group throws a standard `Error`, while a missing optional group returns its `name` as `id`, a `null` title, and empty content collections.
+
+If one selector matches several elements, their IDs use the group name followed by a number: `article`, `article-2`, and so on.
 
 ```javascript
 const scraper = new WebScraper({
-  sectionSelectors: ['article', 'section', '.content', 'main']
+  groups: [
+    { selector: 'article', required: true, wait: true, name: 'article' },
+    { selector: '.article-content', required: false, wait: false, name: 'content' }
+  ]
 });
 
-const result = await scraper.scrapeTextStructured('https://example.com');
-// Returns sections matching ANY of the selectors
+const result = await scraper.scrapeTextStructured('https://news-site.com/article');
+// Waiting is enabled by default. Missing required groups throw;
+// missing optional groups return empty sections.
 ```
 
 This is useful when:
-- Different pages use different HTML structures
-- You want to capture multiple types of content sections
+- Required page sections render asynchronously
+- You want to capture multiple types of content sections without failing on missing ones
 - Content is split across various semantic elements
 
 **Benefits:**
 - ✅ More flexible scraping across different page layouts
-- ✅ Fallback selectors if primary selector doesn't match
 - ✅ Combine multiple content areas (e.g., main article + sidebars)
 
 ### Navigation Wait Strategy (`waitUntil`)
@@ -316,7 +317,7 @@ const scraper = new WebScraper({ waitUntil: 'networkidle' });
 **Tips:**
 - `'domcontentloaded'` is the default — prefer it unless content is missing.
 - Use `'networkidle'` for SPAs that render after async data fetches, but expect slower scraping.
-- Combine with `waitForSelector` to wait for a specific element after navigation.
+- Use `groups` to name sections and independently control waiting and required behavior.
 
 ## 📊 Output Formats
 

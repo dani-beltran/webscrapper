@@ -1,10 +1,37 @@
 import { chromium, firefox, webkit } from 'playwright';
 import { RedirectError } from './errors/RedirectError.js';
-import { SectionNotFoundError } from './errors/SectionNotFoundError.js';
-import { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
 import { getErrorMessage } from './utils/get-error-message.js';
 
-export { RedirectError, SectionNotFoundError, SelectorTimeoutError };
+export { RedirectError };
+
+function normalizeGroups(groups) {
+  if (!Array.isArray(groups)) {
+    throw new TypeError('groups must be an array of group objects');
+  }
+
+  return groups.map((group, index) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) {
+      throw new TypeError(`groups[${index}] must be a group object`);
+    }
+
+    const { selector, required = false, wait = true, name = selector } = group;
+
+    if (typeof selector !== 'string' || selector.trim().length === 0) {
+      throw new TypeError(`groups[${index}].selector must be a non-empty string`);
+    }
+    if (typeof required !== 'boolean') {
+      throw new TypeError(`groups[${index}].required must be a boolean`);
+    }
+    if (typeof wait !== 'boolean') {
+      throw new TypeError(`groups[${index}].wait must be a boolean`);
+    }
+    if (typeof name !== 'string' || name.trim().length === 0) {
+      throw new TypeError(`groups[${index}].name must be a non-empty string`);
+    }
+
+    return { selector, required, wait, name };
+  });
+}
 
 export class WebScraper {
   constructor(options = {}) {
@@ -16,8 +43,7 @@ export class WebScraper {
       browser: options.browser || 'chromium',
       headless: options.headless !== false,
       timeout: options.timeout || 30000,
-      sectionSelectors: options.sectionSelectors || [],
-      waitForSelector: options.waitForSelector || null,
+      groups: normalizeGroups(options.groups ?? []),
       waitUntil: options.waitUntil || 'domcontentloaded',
       excludeSelectors: options.excludeSelectors || ['script', 'style', 'nav', 'footer', 'aside', '.ads', '.advertisement'],
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -99,7 +125,6 @@ export class WebScraper {
       page.setDefaultTimeout(this.options.timeout);
       
       let redirectInfo = null;
-      let bodyText = '';
       if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
         page.on('response', async (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
@@ -114,27 +139,18 @@ export class WebScraper {
                 url: response.url()
               };
             }
-          } else {
-            bodyText = await response.text();
           }
         });
       }
 
       // Navigate to the page
-      const response = await page.goto(url, { waitUntil: this.options.waitUntil });
+      await page.goto(url, { waitUntil: this.options.waitUntil });
 
       if (redirectInfo) {
         await page.close();
         throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }
       
-      // Wait for specific selector if provided
-      if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch(() => {
-          throw new SelectorTimeoutError([this.options.waitForSelector], url, bodyText);
-        });
-      }
-
       if (this.options.plugin) {
         await this.options.plugin(page);
       }
@@ -197,7 +213,6 @@ export class WebScraper {
       page.setDefaultTimeout(this.options.timeout);
       
       let redirectInfo = null;
-      let bodyText = '';
       if (!this.options.followPermanentRedirect || !this.options.followTemporaryRedirect) {
         page.on('response', async (response) => {
           if (response.url() === url || response.request().redirectedFrom()) {
@@ -212,47 +227,64 @@ export class WebScraper {
                 url: response.url()
               };
             }
-          } else {
-            bodyText = await response.text();
           }
         });
       }
 
-      const response = await page.goto(url, { waitUntil: this.options.waitUntil });
+      await page.goto(url, { waitUntil: this.options.waitUntil });
 
       if (redirectInfo) {
         await page.close();
         throw new RedirectError(redirectInfo.status, redirectInfo.location, url);
       }
       
-      if (this.options.waitForSelector) {
-        await page.waitForSelector(this.options.waitForSelector, { timeout: this.options.timeout }).catch((reason) => {
-          throw new SelectorTimeoutError([this.options.waitForSelector], url, bodyText);
-        });
-      }
-
       if (this.options.plugin) {
         await this.options.plugin(page);
       }
 
+      // Wait for groups that opt into waiting. Required groups fail if their
+      // selector is still unavailable; optional groups become empty sections.
+      for (const { selector, required, wait, name } of this.options.groups) {
+        if (!wait) {
+          continue;
+        }
+
+        try {
+          await page.waitForSelector(selector, {
+            state: 'attached',
+            timeout: this.options.timeout
+          });
+        } catch (error) {
+          if (error?.name !== 'TimeoutError') {
+            throw error;
+          }
+          if (required) {
+            throw new Error(`Required section group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms.`);
+          }
+          console.warn(`Warning: Section group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms. It will be empty.`);
+        }
+      }
+
       // Extract structured content
-      const structuredContent = await this.runOnStablePage(page, () => page.evaluate(({ excludeSelectors, sectionSelectors }) => {
+      const structuredContent = await this.runOnStablePage(page, () => page.evaluate(({ excludeSelectors, groups }) => {
         // Remove excluded elements
         excludeSelectors.forEach(selector => {
           const elements = document.querySelectorAll(selector);
           elements.forEach(el => el.remove());
         });
         
+        const createEmptyStructuredData = () => ({
+          headings: {},
+          paragraphs: [],
+          otherText: [],
+          links: [],
+          lists: [],
+          images: [],
+        });
+
         // Helper function to extract structured data from an element
         const extractFromElement = (element) => {
-          const data = {
-            headings: {},
-            paragraphs: [],
-            otherText: [],
-            links: [],
-            lists: [],
-            images: [],
-          };
+          const data = createEmptyStructuredData();
           
           // Extract headings
           ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(tag => {
@@ -335,56 +367,58 @@ export class WebScraper {
           title: document.title || ''
         };
         
-        // If section selectors are provided, group by sections
-        if (sectionSelectors && sectionSelectors.length > 0) {
+        // If groups are provided, extract their matching sections.
+        if (groups && groups.length > 0) {
           const allSections = [];
           
-          // Try each selector and collect matching sections
-          sectionSelectors.forEach(selector => {
+          // Collect matches and retain an empty entry for each missing selector.
+          groups.forEach(({ selector, required, name }) => {
             const sections = Array.from(document.querySelectorAll(selector));
-            sections.forEach(section => {
-              // Avoid duplicates if sections match multiple selectors
-              if (!allSections.includes(section)) {
-                allSections.push(section);
+
+            if (sections.length === 0) {
+              if (required) {
+                throw new Error(`Required section group "${name}" (${selector}) was not found.`);
               }
+              allSections.push({ name, element: null, matchIndex: 0 });
+              return;
+            }
+
+            sections.forEach((section, matchIndex) => {
+              allSections.push({ name, element: section, matchIndex });
             });
           });
           
-          if (allSections.length > 0) {
-            result.sections = allSections.map((section, index) => {
-              // Try to find a section identifier (id, class, or first heading)
-              let sectionId = section.id || section.className || `section-${index}`;
-              
-              // Try to get section title from first heading
-              const firstHeading = section.querySelector('h1, h2, h3, h4, h5, h6');
-              const sectionTitle = firstHeading ? firstHeading.textContent.trim() : null;
-              
+          result.sections = allSections.map(({ name, element, matchIndex }) => {
+            if (!element) {
               return {
-                id: sectionId,
-                title: sectionTitle,
-                ...extractFromElement(section)
+                id: name,
+                title: null,
+                ...createEmptyStructuredData()
               };
-            });
-          } else {
-            // No sections found with any of the selectors
-            return { error: 'SECTIONS_NOT_FOUND', selectors: sectionSelectors, bodyText: document.body.innerText.trim() };
-          }
+            }
+
+            const sectionId = matchIndex === 0 ? name : `${name}-${matchIndex + 1}`;
+
+            // Try to get section title from first heading
+            const firstHeading = element.querySelector('h1, h2, h3, h4, h5, h6');
+            const sectionTitle = firstHeading ? firstHeading.textContent.trim() : null;
+
+            return {
+              id: sectionId,
+              title: sectionTitle,
+              ...extractFromElement(element)
+            };
+          });
         } else {
-          // No section selectors provided, extract from entire document
+          // No groups provided, extract from the entire document.
           Object.assign(result, extractFromElement(document.body));
         }
         
         return result;
       }, { 
         excludeSelectors: this.options.excludeSelectors,
-        sectionSelectors: this.options.sectionSelectors
+        groups: this.options.groups
       }));
-      
-      // Check if sections were not found
-      if (structuredContent.error === 'SECTIONS_NOT_FOUND') {
-        await page.close();
-        throw new SectionNotFoundError(structuredContent.selectors, url, structuredContent.bodyText);
-      }
       
       await page.close();
       
@@ -422,14 +456,6 @@ export class WebScraper {
             redirect: true,
             status: error.status,
             location: error.location,
-            message: error.message,
-            timestamp: error.timestamp
-          });
-        } else if (error instanceof SectionNotFoundError) {
-          results.push({
-            url: error.url,
-            sectionsNotFound: true,
-            selectors: error.selectors,
             message: error.message,
             timestamp: error.timestamp
           });
