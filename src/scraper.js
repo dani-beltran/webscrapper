@@ -243,7 +243,7 @@ export class WebScraper {
       }
 
       // Wait for groups that opt into waiting. Required groups fail if their
-      // selector is still unavailable; optional groups become empty sections.
+      // selector is still unavailable; optional groups return empty values.
       for (const { selector, required, wait, name } of this.options.groups) {
         if (!wait) {
           continue;
@@ -259,9 +259,9 @@ export class WebScraper {
             throw error;
           }
           if (required) {
-            throw new Error(`Required section group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms.`);
+            throw new Error(`Required group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms.`);
           }
-          console.warn(`Warning: Section group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms. It will be empty.`);
+          console.warn(`Warning: Group "${name}" (${selector}) was not found on page ${url} after ${this.options.timeout}ms. It will be empty.`);
         }
       }
 
@@ -367,28 +367,28 @@ export class WebScraper {
           title: document.title || ''
         };
         
-        // If groups are provided, extract their matching sections.
+        // If groups are provided, extract their matching elements.
         if (groups && groups.length > 0) {
-          const allSections = [];
+          const allGroups = [];
           
           // Collect matches and retain an empty entry for each missing selector.
           groups.forEach(({ selector, required, name }) => {
-            const sections = Array.from(document.querySelectorAll(selector));
+            const matches = Array.from(document.querySelectorAll(selector));
 
-            if (sections.length === 0) {
+            if (matches.length === 0) {
               if (required) {
-                throw new Error(`Required section group "${name}" (${selector}) was not found.`);
+                throw new Error(`Required group "${name}" (${selector}) was not found.`);
               }
-              allSections.push({ name, element: null, matchIndex: 0 });
+              allGroups.push({ name, element: null, matchIndex: 0 });
               return;
             }
 
-            sections.forEach((section, matchIndex) => {
-              allSections.push({ name, element: section, matchIndex });
+            matches.forEach((element, matchIndex) => {
+              allGroups.push({ name, element, matchIndex });
             });
           });
           
-          result.sections = allSections.map(({ name, element, matchIndex }) => {
+          result.groups = allGroups.map(({ name, element, matchIndex }) => {
             if (!element) {
               return {
                 id: name,
@@ -397,15 +397,15 @@ export class WebScraper {
               };
             }
 
-            const sectionId = matchIndex === 0 ? name : `${name}-${matchIndex + 1}`;
+            const groupId = matchIndex === 0 ? name : `${name}-${matchIndex + 1}`;
 
-            // Try to get section title from first heading
+            // Try to get the group title from its first heading.
             const firstHeading = element.querySelector('h1, h2, h3, h4, h5, h6');
-            const sectionTitle = firstHeading ? firstHeading.textContent.trim() : null;
+            const groupTitle = firstHeading ? firstHeading.textContent.trim() : null;
 
             return {
-              id: sectionId,
-              title: sectionTitle,
+              id: groupId,
+              title: groupTitle,
               ...extractFromElement(element)
             };
           });

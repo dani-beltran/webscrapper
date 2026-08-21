@@ -4,7 +4,7 @@ export { RedirectError } from './errors/RedirectError.js';
 
 export type WebScraperPlugin = (page: Page) => void | Promise<void>;
 
-export interface SectionGroup {
+export interface GroupConfig {
   selector: string;
   /** Throw when the selector is missing. @default false */
   required?: boolean;
@@ -17,13 +17,13 @@ export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   timeout?: number;
-  groups?: SectionGroup[];
+  groups?: GroupConfig[];
   waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
   excludeSelectors?: string[];
   userAgent?: string;
   followPermanentRedirect?: boolean;
   followTemporaryRedirect?: boolean;
-  /** Runs after navigation, before configured section group waits and content extraction. */
+  /** Runs after navigation, before configured group waits and content extraction. */
   plugin?: WebScraperPlugin;
 }
 
@@ -61,7 +61,7 @@ export interface StructuredData {
   images: ImageData[];
 }
 
-export interface SectionData extends StructuredData {
+export interface GroupData extends StructuredData {
   id: string;
   title: string | null;
 }
@@ -70,7 +70,7 @@ export interface ScrapeStructuredResult extends Partial<StructuredData> {
   url: string;
   title: string;
   timestamp: string;
-  sections?: SectionData[];
+  groups?: GroupData[];
 }
 
 export interface ScrapeErrorResult {

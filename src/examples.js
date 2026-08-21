@@ -51,23 +51,23 @@ async function runExamples() {
     await customScraper.close();
     console.log('---\n');
 
-    console.log('=== Example 5: Named section groups ===');
-    const sectionScraper = new WebScraper({
+    console.log('=== Example 5: Named groups ===');
+    const groupScraper = new WebScraper({
       groups: [
         { selector: 'h1', required: true, wait: true, name: 'main-heading' },
         { selector: 'p', required: false, wait: false, name: 'paragraph' }
       ]
     });
     
-    const sectionResult = await sectionScraper.scrapeTextStructured('https://example.com');
-    console.log('Title:', sectionResult.title);
-    console.log('Number of sections found:', sectionResult.sections?.length || 0);
-    if (sectionResult.sections) {
-      sectionResult.sections.forEach((section, idx) => {
-        console.log(`  Section ${idx + 1}: ${section.title || section.id}`);
+    const groupResult = await groupScraper.scrapeTextStructured('https://example.com');
+    console.log('Title:', groupResult.title);
+    console.log('Number of groups found:', groupResult.groups?.length || 0);
+    if (groupResult.groups) {
+      groupResult.groups.forEach((group, idx) => {
+        console.log(`  Group ${idx + 1}: ${group.title || group.id}`);
       });
     }
-    await sectionScraper.close();
+    await groupScraper.close();
 
   } catch (error) {
     console.error('Example failed:', error.message);

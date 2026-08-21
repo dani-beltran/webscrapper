@@ -75,7 +75,7 @@ async function runTests() {
 
     try {
       new WebScraper({ groups: ['#legacy-string'] });
-      throw new Error('String section selectors should be rejected');
+      throw new Error('String group entries should be rejected');
     } catch (error) {
       if (!(error instanceof TypeError) || !error.message.includes('group object')) {
         throw error;
@@ -178,8 +178,8 @@ async function runTests() {
     await scraper.close();
   });
 
-  // Test 7: Multiple named section groups
-  await test('Multiple named section groups', async () => {
+  // Test 7: Multiple named groups
+  await test('Multiple named groups', async () => {
     const scraper = new WebScraper({
       headless: true,
       groups: [
@@ -195,21 +195,21 @@ async function runTests() {
       throw new Error('groups array length mismatch');
     }
     if (!scraper.options.groups.every(group => group.wait === true)) {
-      throw new Error('Section group wait should default to true');
+      throw new Error('Group wait should default to true');
     }
     
     const result = await scraper.scrapeTextStructured(sectionFixtureUrl);
-    if (!result.sections) throw new Error('Sections not extracted');
-    if (!Array.isArray(result.sections)) throw new Error('Sections should be an array');
-    if (result.sections.length !== 2) throw new Error('Did not wait for every section selector');
-    if (result.sections[0].id !== 'first-section') throw new Error('First section group name was not used as its id');
-    if (result.sections[1].id !== 'second-section') throw new Error('Second section group name was not used as its id');
+    if (!result.groups) throw new Error('Groups not extracted');
+    if (!Array.isArray(result.groups)) throw new Error('Groups should be an array');
+    if (result.groups.length !== 2) throw new Error('Did not wait for every group selector');
+    if (result.groups[0].id !== 'first-section') throw new Error('First group name was not used as its id');
+    if (result.groups[1].id !== 'second-section') throw new Error('Second group name was not used as its id');
     
     await scraper.close();
   });
 
-  // Test 9: Static section selectors
-  await test('Static section selectors', async () => {
+  // Test 9: Static groups
+  await test('Static groups', async () => {
     const scraper = new WebScraper({
       headless: true,
       groups: [
@@ -220,7 +220,7 @@ async function runTests() {
     
     const result = await scraper.scrapeTextStructured(pluginFixtureUrl);
     
-    if (!result.sections) throw new Error('Sections not extracted');
+    if (!result.groups) throw new Error('Groups not extracted');
     
     await scraper.close();
   });
@@ -261,8 +261,8 @@ async function runTests() {
     await scraper.close();
   });
 
-  // Test 12: Missing section selectors produce empty sections
-  await test('Missing section selector returns an empty section', async () => {
+  // Test 12: Missing optional groups produce empty group values
+  await test('Missing optional group returns an empty group', async () => {
     const scraper = new WebScraper({
       groups: [
         { selector: '.first', required: true, name: 'first-section' },
@@ -274,23 +274,23 @@ async function runTests() {
     });
 
     const result = await scraper.scrapeTextStructured(sectionFixtureUrl);
-    const emptySection = result.sections?.find(section => section.id === 'missing-section');
-    const optionalSection = result.sections?.find(section => section.id === 'optional-section');
+    const emptyGroup = result.groups?.find(group => group.id === 'missing-section');
+    const optionalGroup = result.groups?.find(group => group.id === 'optional-section');
 
-    if (!emptySection) throw new Error('Missing selector should produce a section entry');
-    if (!optionalSection) throw new Error('Missing optional selector should produce a section entry');
-    if (emptySection.title !== null) throw new Error('Empty section title should be null');
-    if (Object.keys(emptySection.headings).length !== 0) throw new Error('Empty section headings should be empty');
+    if (!emptyGroup) throw new Error('Missing selector should produce a group entry');
+    if (!optionalGroup) throw new Error('Missing optional selector should produce a group entry');
+    if (emptyGroup.title !== null) throw new Error('Empty group title should be null');
+    if (Object.keys(emptyGroup.headings).length !== 0) throw new Error('Empty group headings should be empty');
     for (const field of ['paragraphs', 'otherText', 'links', 'lists', 'images']) {
-      if (!Array.isArray(emptySection[field]) || emptySection[field].length !== 0) {
-        throw new Error(`Empty section ${field} should be an empty array`);
+      if (!Array.isArray(emptyGroup[field]) || emptyGroup[field].length !== 0) {
+        throw new Error(`Empty group ${field} should be an empty array`);
       }
     }
 
     await scraper.close();
   });
 
-  await test('Missing required section group throws an error', async () => {
+  await test('Missing required group throws an error', async () => {
     const scraper = new WebScraper({
       groups: [
         { selector: '.non-existent-section', required: true, name: 'required-section' }

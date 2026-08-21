@@ -8,8 +8,8 @@ export type {
   LinkData,
   ListData,
   StructuredData,
-  SectionData,
-  SectionGroup,
+  GroupData,
+  GroupConfig,
   WebScraperPlugin
 } from './scraper.js';
 
