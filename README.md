@@ -377,6 +377,98 @@ npm run show-preset news                      # Show preset config
 npm run scrape -- --preset news "URL"         # Use preset
 ```
 
+## Migrating from v3 to v4
+
+Version 4 replaces the `sectionSelectors` string array with named `groups` and removes the standalone `waitForSelector` option. Each group now controls its own waiting and missing-selector behavior.
+
+Before (v3):
+
+```javascript
+const scraper = new WebScraper({
+  waitForSelector: '.article-ready',
+  sectionSelectors: ['article', '.sidebar']
+});
+
+const result = await scraper.scrapeTextStructured(url);
+```
+
+After (v4):
+
+```javascript
+const scraper = new WebScraper({
+  groups: [
+    {
+      name: 'article',
+      selector: 'article',
+      wait: true,
+      required: true
+    },
+    {
+      name: 'sidebar',
+      selector: '.sidebar',
+      wait: false,
+      required: false
+    }
+  ]
+});
+
+const result = await scraper.scrapeTextStructured(url);
+```
+
+Group fields work as follows:
+
+| Field | Default | Behavior |
+|-------|---------|----------|
+| `selector` | Required | CSS selector used to locate the section. |
+| `name` | `selector` | Stable section `id` in the result. Multiple matches use `name-2`, `name-3`, and so on. |
+| `wait` | `true` | Wait up to the scraper `timeout` before extraction. Set to `false` to check without a selector-specific wait. |
+| `required` | `false` | When `true`, throw a standard `Error` if missing. Otherwise return an empty section. |
+
+### Replacing `waitForSelector`
+
+The `waitForSelector` constructor option and `--wait-for-selector` CLI flag no longer exist. If the selector represents content you want in structured output, make it a group:
+
+```javascript
+const scraper = new WebScraper({
+  groups: [
+    { name: 'article', selector: '.article-ready', wait: true, required: true }
+  ]
+});
+```
+
+If the selector is only a page-readiness signal, or you use `scrapeText`, wait in a plugin instead. Groups are only processed by `scrapeTextStructured`:
+
+```javascript
+const scraper = new WebScraper({
+  plugin: async (page) => {
+    await page.waitForSelector('.article-ready');
+  }
+});
+```
+
+### Migrating fallback selectors
+
+Groups are independent output slots. If the old array contained alternative selectors for the same section, combine them into one CSS selector so any match satisfies the group:
+
+```javascript
+const scraper = new WebScraper({
+  groups: [
+    {
+      name: 'article',
+      selector: 'article, .article-content, .post-content',
+      wait: true,
+      required: true
+    }
+  ]
+});
+```
+
+### Removed errors and CLI behavior
+
+`SelectorTimeoutError` and `SectionNotFoundError` were removed. Missing required groups now throw a standard `Error`; missing optional groups return empty structured data. Remove imports and `instanceof` checks for those custom classes.
+
+The `--group-by <selector>` CLI option remains available. Each CLI selector is converted to a group whose `name` is the selector and whose `wait` and `required` values are both `true`. Remove any use of `--wait-for-selector`.
+
 ## Migrating from v2 to v3
 
 Version 3.0.0 replaces the declarative `interactionSteps` option with the `plugin` callback. Move each old step into an awaited Playwright call on the supplied `Page`.
@@ -453,7 +545,7 @@ npm run scrape "URL" -- --plugin-file plugin.mjs
 | Issue | Solution |
 |-------|----------|
 | Timeout errors | Increase timeout: `--timeout 60000` |
-| Empty results | Try preset or wait selector |
+| Empty results | Configure a structured `group` or wait in a plugin |
 | Browser crashes | Reduce batch size: `--batch-size 2` |
 | Memory issues | Process fewer URLs at once |
 | Preset not found | Run `npm run list-presets` |
