@@ -29,7 +29,6 @@ Options:
   --help, -h                - Show this help message
   --preset <name>           - Use configuration preset (triggers config mode)
   --group-by <selector>     - CSS selector to group structured results by sections
-  --wait-for-selector <sel> - Wait for a CSS selector to appear before scraping
   --plugin-file <path>      - JavaScript module whose default export runs before scraping
 
 
@@ -71,6 +70,15 @@ async function loadPluginFromFile(filePath) {
   }
 
   return pluginModule.default;
+}
+
+function selectorsToGroups(selectors) {
+  return selectors.map(selector => ({
+    selector,
+    required: true,
+    wait: true,
+    name: selector
+  }));
 }
 
 async function main() {
@@ -168,7 +176,6 @@ async function handleSingleMode(args) {
     groupBy: [],
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
-    waitForSelector: null,
   };
 
   // Parse arguments
@@ -201,9 +208,6 @@ async function handleSingleMode(args) {
       case '--group-by':
         options.groupBy.push(args[++i]);
         options.structured = true; // Auto-enable structured mode when grouping
-        break;
-      case '--wait-for-selector':
-        options.waitForSelector = args[++i];
         break;
       case '--plugin-file':
         options.plugin = await loadPluginFromFile(args[++i]);
@@ -243,7 +247,6 @@ async function handleSingleMode(args) {
     💾 Output ${options.outputFile ? `file: ${options.outputFile}` : `in console`}
     ${options.structured ? '📊 Structured mode enabled' : '📝 Plain text mode'}
     📦 Grouping by selector: ${options.groupBy.join(', ') || 'None'}
-    ⏳ Waiting for selector: ${options.waitForSelector || 'None'}
     🧩 Pre-scrape plugin: ${options.plugin ? 'Enabled' : 'None'}
   `);
   
@@ -253,8 +256,7 @@ async function handleSingleMode(args) {
     timeout: options.timeout,
     followPermanentRedirect: options.followPermanentRedirect,
     followTemporaryRedirect: options.followTemporaryRedirect,
-    sectionSelectors: options.groupBy,
-    waitForSelector: options.waitForSelector,
+    groups: selectorsToGroups(options.groupBy),
     plugin: options.plugin
   });
 
@@ -354,7 +356,6 @@ async function handleBulkMode(args) {
     timeout: 30000,
     followPermanentRedirect: true,
     followTemporaryRedirect: true,
-    waitForSelector: null,
   };
   let bulkOptions = {
     structured: false,
@@ -404,9 +405,6 @@ async function handleBulkMode(args) {
         break;
       case '--no-follow-temporary-redirect':
         scraperOptions.followTemporaryRedirect = false;
-        break;
-      case '--wait-for-selector':
-        scraperOptions.waitForSelector = args[++i];
         break;
       case '--plugin-file':
         scraperOptions.plugin = await loadPluginFromFile(args[++i]);
@@ -464,7 +462,10 @@ async function handleBulkMode(args) {
     console.log(`   Group by selector: ${bulkOptions.groupBy}`);
   };
   
-  const bulkScraper = new BulkScraper(scraperOptions);
+  const bulkScraper = new BulkScraper({
+    ...scraperOptions,
+    groups: selectorsToGroups(bulkOptions.groupBy)
+  });
   
   let results;
   if (subMode === 'file') {
@@ -584,9 +585,6 @@ async function handleConfigScrapeCommand(args) {
       case '--group-by':
         options.groupBy.push(args[++i]);
         break;
-      case '--wait-for-selector':
-        options.customOptions.waitForSelector = args[++i];
-        break;
       case '--plugin-file':
         options.customOptions.plugin = await loadPluginFromFile(args[++i]);
         break;
@@ -625,7 +623,10 @@ async function handleConfigScrapeCommand(args) {
     console.log(`📦 Grouping by selector: ${options.groupBy}`);
   }
 
-  const scraper = new ConfigurableScraper(preset, {groupBy: options.groupBy, ...options.customOptions});
+  const scraper = new ConfigurableScraper(preset, {
+    groups: selectorsToGroups(options.groupBy),
+    ...options.customOptions
+  });
   const result = await scraper.scrapeTextStructured(url);
   
   // Display results based on format

@@ -51,9 +51,12 @@ async function runExamples() {
     await customScraper.close();
     console.log('---\n');
 
-    console.log('=== Example 5: Multiple section selectors ===');
+    console.log('=== Example 5: Named section groups ===');
     const sectionScraper = new WebScraper({
-      sectionSelectors: ['h1', 'p']
+      groups: [
+        { selector: 'h1', required: true, wait: true, name: 'main-heading' },
+        { selector: 'p', required: false, wait: false, name: 'paragraph' }
+      ]
     });
     
     const sectionResult = await sectionScraper.scrapeTextStructured('https://example.com');

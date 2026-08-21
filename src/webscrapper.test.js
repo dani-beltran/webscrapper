@@ -1,5 +1,4 @@
 import { WebScraper } from './scraper.js';
-import { SectionNotFoundError } from './errors/index.js';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -13,6 +12,7 @@ async function runTests() {
   const testDir = mkdtempSync(join(tmpdir(), 'webscrapper-tests-'));
   const pluginFixturePath = join(testDir, 'plugin-fixture.html');
   const redirectFixturePath = join(testDir, 'redirect-fixture.html');
+  const sectionFixturePath = join(testDir, 'section-fixture.html');
   writeFileSync(pluginFixturePath, `<!doctype html>
 <html>
   <body>
@@ -34,8 +34,22 @@ async function runTests() {
     </script>
   </body>
 </html>`);
+  writeFileSync(sectionFixturePath, `<!doctype html>
+<html>
+  <body>
+    <script>
+      setTimeout(() => {
+        document.body.insertAdjacentHTML('beforeend', '<section class="first"><h2>First</h2></section>');
+      }, 50);
+      setTimeout(() => {
+        document.body.insertAdjacentHTML('beforeend', '<article class="second"><h2>Second</h2></article>');
+      }, 100);
+    </script>
+  </body>
+</html>`);
   const pluginFixtureUrl = pathToFileURL(pluginFixturePath).href;
   const redirectFixtureUrl = pathToFileURL(redirectFixturePath).href;
+  const sectionFixtureUrl = pathToFileURL(sectionFixturePath).href;
 
   const test = async (name, testFn) => {
     try {
@@ -52,9 +66,21 @@ async function runTests() {
 
   // Test 1: Basic scraper initialization
   await test('Scraper initialization', async () => {
-    const scraper = new WebScraper();
+    const scraper = new WebScraper({ waitForSelector: '#removed-option' });
     if (!scraper.options.browser) throw new Error('Browser option not set');
     if (scraper.options.timeout !== 30000) throw new Error('Default timeout not correct');
+    if (Object.hasOwn(scraper.options, 'waitForSelector')) {
+      throw new Error('waitForSelector should not be a scraper option');
+    }
+
+    try {
+      new WebScraper({ groups: ['#legacy-string'] });
+      throw new Error('String section selectors should be rejected');
+    } catch (error) {
+      if (!(error instanceof TypeError) || !error.message.includes('group object')) {
+        throw error;
+      }
+    }
     await scraper.close();
   });
 
@@ -152,35 +178,47 @@ async function runTests() {
     await scraper.close();
   });
 
-  // Test 7: Multiple section selectors (array)
-  await test('Multiple section selectors as array', async () => {
+  // Test 7: Multiple named section groups
+  await test('Multiple named section groups', async () => {
     const scraper = new WebScraper({
       headless: true,
-      sectionSelectors: ['article', 'section', '.content', 'main', 'div']
+      groups: [
+        { selector: '.first', required: true, name: 'first-section' },
+        { selector: '.second', required: true, name: 'second-section' }
+      ]
     });
     
-    if (!Array.isArray(scraper.options.sectionSelectors)) {
-      throw new Error('sectionSelectors should be an array');
+    if (!Array.isArray(scraper.options.groups)) {
+      throw new Error('groups should be an array');
     }
-    if (scraper.options.sectionSelectors.length !== 5) {
-      throw new Error('sectionSelectors array length mismatch');
+    if (scraper.options.groups.length !== 2) {
+      throw new Error('groups array length mismatch');
+    }
+    if (!scraper.options.groups.every(group => group.wait === true)) {
+      throw new Error('Section group wait should default to true');
     }
     
-    const result = await scraper.scrapeTextStructured('https://example.com');
+    const result = await scraper.scrapeTextStructured(sectionFixtureUrl);
     if (!result.sections) throw new Error('Sections not extracted');
     if (!Array.isArray(result.sections)) throw new Error('Sections should be an array');
+    if (result.sections.length !== 2) throw new Error('Did not wait for every section selector');
+    if (result.sections[0].id !== 'first-section') throw new Error('First section group name was not used as its id');
+    if (result.sections[1].id !== 'second-section') throw new Error('Second section group name was not used as its id');
     
     await scraper.close();
   });
 
-  // Test 9: Override section selectors per request
-  await test('Override section selectors per request', async () => {
+  // Test 9: Static section selectors
+  await test('Static section selectors', async () => {
     const scraper = new WebScraper({
       headless: true,
-      sectionSelectors: ['div', 'article']
+      groups: [
+        { selector: '#expand', required: false, wait: false, name: 'expand-control' },
+        { selector: '#content', required: false, wait: false, name: 'content' }
+      ]
     });
     
-    const result = await scraper.scrapeTextStructured('https://example.com');
+    const result = await scraper.scrapeTextStructured(pluginFixtureUrl);
     
     if (!result.sections) throw new Error('Sections not extracted');
     
@@ -223,33 +261,56 @@ async function runTests() {
     await scraper.close();
   });
 
-  // Test 12: SectionNotFoundError handling
-  await test('SectionNotFoundError for non-existent sections', async () => {
+  // Test 12: Missing section selectors produce empty sections
+  await test('Missing section selector returns an empty section', async () => {
     const scraper = new WebScraper({
-      sectionSelectors: ['.non-existent-section', '#another-non-existent-section'],
-      headless: true
+      groups: [
+        { selector: '.first', required: true, name: 'first-section' },
+        { selector: '.non-existent-section', required: false, name: 'missing-section' },
+        { selector: '.optional-section', required: false, wait: false, name: 'optional-section' }
+      ],
+      headless: true,
+      timeout: 100
     });
-    
-    try {
-      // This should throw a SectionNotFoundError
-      await scraper.scrapeTextStructured('https://example.com');
-      throw new Error('Should have thrown SectionNotFoundError');
-    } catch (error) {
-      if (!(error instanceof SectionNotFoundError)) {
-        throw new Error(`Expected SectionNotFoundError, got ${error.constructor.name}: ${error.message}`);
+
+    const result = await scraper.scrapeTextStructured(sectionFixtureUrl);
+    const emptySection = result.sections?.find(section => section.id === 'missing-section');
+    const optionalSection = result.sections?.find(section => section.id === 'optional-section');
+
+    if (!emptySection) throw new Error('Missing selector should produce a section entry');
+    if (!optionalSection) throw new Error('Missing optional selector should produce a section entry');
+    if (emptySection.title !== null) throw new Error('Empty section title should be null');
+    if (Object.keys(emptySection.headings).length !== 0) throw new Error('Empty section headings should be empty');
+    for (const field of ['paragraphs', 'otherText', 'links', 'lists', 'images']) {
+      if (!Array.isArray(emptySection[field]) || emptySection[field].length !== 0) {
+        throw new Error(`Empty section ${field} should be an empty array`);
       }
-      
-      // Verify error properties
-      if (!error.message) throw new Error('Error should have a message');
-      if (!error.selectors) throw new Error('Error should have selectors property');
-      if (!error.url) throw new Error('Error should have url property');
-      if (!error.timestamp) throw new Error('Error should have timestamp property');
-      
-      // Verify selectors match what we passed in
-      if (!Array.isArray(error.selectors)) throw new Error('Error selectors should be an array');
-      if (error.selectors.length !== 2) throw new Error('Error selectors should contain 2 elements');
+    }
+
+    await scraper.close();
+  });
+
+  await test('Missing required section group throws an error', async () => {
+    const scraper = new WebScraper({
+      groups: [
+        { selector: '.non-existent-section', required: true, name: 'required-section' }
+      ],
+      headless: true,
+      timeout: 100
+    });
+
+    let thrownError = null;
+    try {
+      await scraper.scrapeTextStructured(sectionFixtureUrl);
+    } catch (error) {
+      thrownError = error;
     } finally {
       await scraper.close();
+    }
+
+    if (!(thrownError instanceof Error)) throw new Error('Missing required group should throw an Error');
+    if (!thrownError.message.includes('required-section')) {
+      throw new Error('Required group error should identify the group name');
     }
   });
 

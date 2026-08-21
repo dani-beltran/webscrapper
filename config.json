@@ -34,32 +34,28 @@
         "script", "style", "nav", "footer", "aside", "header",
         ".ads", ".advertisement", ".sidebar", ".comments", "#comments",
         ".social-share", ".cookie-notice", ".related-articles", ".newsletter"
-      ],
-      "waitForSelector": "article, .article-content, .post-content"
+      ]
     },
     "ecommerce": {
       "excludeSelectors": [
         "script", "style", "nav", "footer", "aside", "header",
         ".ads", ".advertisement", ".reviews", ".recommendations",
         ".cart", ".checkout", ".price-comparison"
-      ],
-      "waitForSelector": ".product-description, .product-info"
+      ]
     },
     "blog": {
       "excludeSelectors": [
         "script", "style", "nav", "footer", "aside", "header",
         ".ads", ".advertisement", ".sidebar", ".comments", "#comments",
         ".social-share", ".author-bio", ".related-posts"
-      ],
-      "waitForSelector": ".post-content, .entry-content, article"
+      ]
     },
     "documentation": {
       "excludeSelectors": [
         "script", "style", "nav", "footer", "aside", "header",
         ".ads", ".advertisement", ".sidebar", ".edit-page",
         ".page-nav", ".breadcrumbs"
-      ],
-      "waitForSelector": ".content, .documentation, .docs-content"
+      ]
     }
   }
 }

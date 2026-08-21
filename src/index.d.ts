@@ -9,6 +9,7 @@ export type {
   ListData,
   StructuredData,
   SectionData,
+  SectionGroup,
   WebScraperPlugin
 } from './scraper.js';
 

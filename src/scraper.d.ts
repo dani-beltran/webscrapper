@@ -1,23 +1,29 @@
 import type { Page } from 'playwright';
 
 export { RedirectError } from './errors/RedirectError.js';
-export { SectionNotFoundError } from './errors/SectionNotFoundError.js';
-export { SelectorTimeoutError } from './errors/SelectorTimeoutError.js';
 
 export type WebScraperPlugin = (page: Page) => void | Promise<void>;
+
+export interface SectionGroup {
+  selector: string;
+  /** Throw when the selector is missing. @default false */
+  required?: boolean;
+  /** Wait for the selector before extraction. @default true */
+  wait?: boolean;
+  name?: string;
+}
 
 export interface WebScraperOptions {
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   timeout?: number;
-  sectionSelectors?: string[];
-  waitForSelector?: string | null;
+  groups?: SectionGroup[];
   waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
   excludeSelectors?: string[];
   userAgent?: string;
   followPermanentRedirect?: boolean;
   followTemporaryRedirect?: boolean;
-  /** Runs after navigation and waitForSelector, before content extraction. */
+  /** Runs after navigation, before configured section group waits and content extraction. */
   plugin?: WebScraperPlugin;
 }
 
