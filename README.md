@@ -45,7 +45,7 @@ npm run scrape "https://example.com"
 # Structured content (headings, links, paragraphs, lists)
 npm run scrape "https://example.com" -- --structured
 
-# Group content by sections
+# Group structured content
 npm run scrape "https://news-site.com" -- --structured --group-by "article"
 
 # Run a JavaScript plugin before scraping
@@ -123,15 +123,15 @@ const customScraper = new WebScraper({
 const structured = await scraper.scrapeTextStructured('https://example.com');
 console.log(structured.headings, structured.links);
 
-// Named section groups
-const sectionScraper = new WebScraper({
+// Named groups
+const groupScraper = new WebScraper({
   groups: [
     { selector: 'article', required: true, wait: true, name: 'article' },
     { selector: '.article-content', required: false, wait: false, name: 'content' }
   ]
 });
-const sections = await sectionScraper.scrapeTextStructured('https://news-site.com/article');
-console.log(sections.sections); // Array of matched sections
+const groupedResult = await groupScraper.scrapeTextStructured('https://news-site.com/article');
+console.log(groupedResult.groups); // Array of matched groups
 ```
 
 ### Using Presets Programmatically
@@ -178,7 +178,7 @@ const scraper = new WebScraper({
 });
 ```
 
-The plugin is awaited once per scraped URL after `page.goto()`, before section groups with `wait` enabled are awaited and content is extracted. If it throws, that scrape fails with the same error. Handle optional actions inside the plugin when they should not abort scraping:
+The plugin is awaited once per scraped URL after `page.goto()`, before groups with `wait` enabled are awaited and content is extracted. If it throws, that scrape fails with the same error. Handle optional actions inside the plugin when they should not abort scraping:
 
 ```javascript
 plugin: async (page) => {
@@ -264,7 +264,7 @@ try {
 - ✅ Validate URL structure without following redirects
 - ✅ Audit SEO redirect configurations
 
-### Named Section Groups
+### Named Groups
 
 `groups` accepts objects with a CSS `selector`, a stable output `name`, a `required` flag, and a `wait` flag. `wait` defaults to `true`; set it to `false` to sample the group without a selector-specific wait. `required` defaults to `false`. A missing required group throws a standard `Error`, while a missing optional group returns its `name` as `id`, a `null` title, and empty content collections.
 
@@ -280,12 +280,12 @@ const scraper = new WebScraper({
 
 const result = await scraper.scrapeTextStructured('https://news-site.com/article');
 // Waiting is enabled by default. Missing required groups throw;
-// missing optional groups return empty sections.
+// missing optional groups return empty group values.
 ```
 
 This is useful when:
-- Required page sections render asynchronously
-- You want to capture multiple types of content sections without failing on missing ones
+- Required page content renders asynchronously
+- You want to capture multiple content groups without failing on missing ones
 - Content is split across various semantic elements
 
 **Benefits:**
@@ -317,7 +317,7 @@ const scraper = new WebScraper({ waitUntil: 'networkidle' });
 **Tips:**
 - `'domcontentloaded'` is the default — prefer it unless content is missing.
 - Use `'networkidle'` for SPAs that render after async data fetches, but expect slower scraping.
-- Use `groups` to name sections and independently control waiting and required behavior.
+- Use `groups` to name output groups and independently control waiting and required behavior.
 
 ## 📊 Output Formats
 
@@ -379,7 +379,7 @@ npm run scrape -- --preset news "URL"         # Use preset
 
 ## Migrating from v3 to v4
 
-Version 4 replaces the `sectionSelectors` string array with named `groups` and removes the standalone `waitForSelector` option. Each group now controls its own waiting and missing-selector behavior.
+Version 4 replaces the `sectionSelectors` string array with named `groups`, renames the structured result field from `sections` to `groups`, and removes the standalone `waitForSelector` option. Each group now controls its own waiting and missing-selector behavior.
 
 Before (v3):
 
@@ -390,6 +390,7 @@ const scraper = new WebScraper({
 });
 
 const result = await scraper.scrapeTextStructured(url);
+console.log(result.sections);
 ```
 
 After (v4):
@@ -413,16 +414,17 @@ const scraper = new WebScraper({
 });
 
 const result = await scraper.scrapeTextStructured(url);
+console.log(result.groups);
 ```
 
 Group fields work as follows:
 
 | Field | Default | Behavior |
 |-------|---------|----------|
-| `selector` | Required | CSS selector used to locate the section. |
-| `name` | `selector` | Stable section `id` in the result. Multiple matches use `name-2`, `name-3`, and so on. |
+| `selector` | Required | CSS selector used to locate the group content. |
+| `name` | `selector` | Stable group `id` in the result. Multiple matches use `name-2`, `name-3`, and so on. |
 | `wait` | `true` | Wait up to the scraper `timeout` before extraction. Set to `false` to check without a selector-specific wait. |
-| `required` | `false` | When `true`, throw a standard `Error` if missing. Otherwise return an empty section. |
+| `required` | `false` | When `true`, throw a standard `Error` if missing. Otherwise return an empty group. |
 
 ### Replacing `waitForSelector`
 
@@ -448,7 +450,7 @@ const scraper = new WebScraper({
 
 ### Migrating fallback selectors
 
-Groups are independent output slots. If the old array contained alternative selectors for the same section, combine them into one CSS selector so any match satisfies the group:
+Groups are independent output slots. If the old array contained alternative selectors for the same content, combine them into one CSS selector so any match satisfies the group:
 
 ```javascript
 const scraper = new WebScraper({
@@ -465,7 +467,7 @@ const scraper = new WebScraper({
 
 ### Removed errors and CLI behavior
 
-`SelectorTimeoutError` and `SectionNotFoundError` were removed. Missing required groups now throw a standard `Error`; missing optional groups return empty structured data. Remove imports and `instanceof` checks for those custom classes.
+`SelectorTimeoutError` and `SectionNotFoundError` were removed. Missing required groups now throw a standard `Error`; missing optional groups return empty group data. Remove imports and `instanceof` checks for those custom classes.
 
 The `--group-by <selector>` CLI option remains available. Each CLI selector is converted to a group whose `name` is the selector and whose `wait` and `required` values are both `true`. Remove any use of `--wait-for-selector`.
 

@@ -28,7 +28,7 @@ Options:
   --file <path>             - Read URLs from file (triggers bulk mode)
   --help, -h                - Show this help message
   --preset <name>           - Use configuration preset (triggers config mode)
-  --group-by <selector>     - CSS selector to group structured results by sections
+  --group-by <selector>     - CSS selector to create structured result groups
   --plugin-file <path>      - JavaScript module whose default export runs before scraping
 
 
@@ -307,15 +307,15 @@ async function handleSingleMode(args) {
   if (options.structured) {
     console.log(`📄 Title: ${result.title || 'N/A'}`);
     
-    if (result.sections) {
-      console.log(`📦 Sections: ${result.sections.length}`);
-      result.sections.forEach((section, i) => {
-        console.log(`\n  Section ${i + 1} (${section.id}):`);
-        if (section.title) console.log(`    Title: ${section.title}`);
-        console.log(`    Paragraphs: ${section.paragraphs.length}`);
-        console.log(`    Links: ${section.links.length}`);
-        console.log(`    Headings: ${Object.values(section.headings).flat().length}`);
-        console.log(`    Lists: ${section.lists.length}`);
+    if (result.groups) {
+      console.log(`📦 Groups: ${result.groups.length}`);
+      result.groups.forEach((group, i) => {
+        console.log(`\n  Group ${i + 1} (${group.id}):`);
+        if (group.title) console.log(`    Title: ${group.title}`);
+        console.log(`    Paragraphs: ${group.paragraphs.length}`);
+        console.log(`    Links: ${group.links.length}`);
+        console.log(`    Headings: ${Object.values(group.headings).flat().length}`);
+        console.log(`    Lists: ${group.lists.length}`);
       });
     } else {
       console.log(`📝 Paragraphs: ${result.paragraphs.length}`);
@@ -635,12 +635,12 @@ async function handleConfigScrapeCommand(args) {
       console.log('\n📊 Results Summary:');
       console.log(`📄 Title: ${result.title || 'N/A'}`);
       
-      if (result.sections) {
-        console.log(`� Sections: ${result.sections.length}`);
-        const totalParagraphs = result.sections.reduce((sum, s) => sum + s.paragraphs.length, 0);
-        const totalLinks = result.sections.reduce((sum, s) => sum + s.links.length, 0);
-        const totalHeadings = result.sections.reduce((sum, s) => sum + Object.values(s.headings).flat().length, 0);
-        const totalLists = result.sections.reduce((sum, s) => sum + s.lists.length, 0);
+      if (result.groups) {
+        console.log(`� Groups: ${result.groups.length}`);
+        const totalParagraphs = result.groups.reduce((sum, group) => sum + group.paragraphs.length, 0);
+        const totalLinks = result.groups.reduce((sum, group) => sum + group.links.length, 0);
+        const totalHeadings = result.groups.reduce((sum, group) => sum + Object.values(group.headings).flat().length, 0);
+        const totalLists = result.groups.reduce((sum, group) => sum + group.lists.length, 0);
         
         console.log(`�📝 Total paragraphs: ${totalParagraphs}`);
         console.log(`🔗 Total links: ${totalLinks}`);
@@ -664,21 +664,21 @@ async function handleConfigScrapeCommand(args) {
       console.log(`📄 Title: ${result.title || 'N/A'}`);
       console.log(`🌐 URL: ${result.url}`);
       
-      if (result.sections) {
-        console.log(`\n📦 Sections (${result.sections.length}):`);
-        result.sections.forEach((section, i) => {
-          console.log(`\n  Section ${i + 1} (${section.id}):`);
-          if (section.title) {
-            console.log(`    Title: ${section.title}`);
+      if (result.groups) {
+        console.log(`\n📦 Groups (${result.groups.length}):`);
+        result.groups.forEach((group, i) => {
+          console.log(`\n  Group ${i + 1} (${group.id}):`);
+          if (group.title) {
+            console.log(`    Title: ${group.title}`);
           }
-          console.log(`    Paragraphs: ${section.paragraphs.length}`);
-          console.log(`    Links: ${section.links.length}`);
-          console.log(`    Headings: ${Object.values(section.headings).flat().length}`);
-          console.log(`    Lists: ${section.lists.length}`);
+          console.log(`    Paragraphs: ${group.paragraphs.length}`);
+          console.log(`    Links: ${group.links.length}`);
+          console.log(`    Headings: ${Object.values(group.headings).flat().length}`);
+          console.log(`    Lists: ${group.lists.length}`);
           
-          if (section.paragraphs.length > 0) {
+          if (group.paragraphs.length > 0) {
             console.log(`\n    First paragraph:`);
-            console.log(`    ${section.paragraphs[0].substring(0, 100)}...`);
+            console.log(`    ${group.paragraphs[0].substring(0, 100)}...`);
           }
         });
       } else {
