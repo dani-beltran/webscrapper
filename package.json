@@ -8,7 +8,7 @@
     "npm": ">=11.10.0"
   },
   "bin": {
-    "webscrapper": "src/commands/scrape.js"
+    "webscrapper": "src/cli.js"
   },
   "files": [
     "src",
@@ -19,12 +19,14 @@
   "type": "module",
   "private": false,
   "scripts": {
-    "scrape": "node src/commands/scrape.js",
-    "list-presets": "node src/commands/list-presets.js",
-    "show-preset": "node src/commands/show-preset.js",
+    "scrape": "node src/cli.js scrape",
+    "list-presets": "node src/cli.js list-presets",
+    "show-preset": "node src/cli.js show-preset",
     "install-browsers": "npx playwright install",
-    "test": "node src/webscrapper.test.js",
-    "debug": "PWDEBUG=1 node src/commands/scrape.js"
+    "test": "npm run test:library && npm run test:cli",
+    "test:library": "node test/webscrapper.test.js",
+    "test:cli": "node --test test/cli.test.js",
+    "debug": "PWDEBUG=1 node src/cli.js scrape"
   },
   "keywords": [
     "webscraping",
@@ -34,7 +36,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "commander": "12.1.0",
     "playwright": "^1.40.0"
-  },
-  "devDependencies": {}
+  }
 }

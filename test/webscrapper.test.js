@@ -1,4 +1,4 @@
-import { WebScraper } from './scraper.js';
+import { WebScraper } from '../src/scraper.js';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';

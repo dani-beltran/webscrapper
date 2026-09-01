@@ -17,6 +17,23 @@ A production-ready web scraping solution built with Playwright that extracts tex
 
 ## 🚀 Quick Start
 
+Run the published package directly with `npx`—no local or global package
+installation is required:
+
+```bash
+# Install the Chromium browser binary once
+npx --package=@danilidonbeltran/webscrapper playwright install chromium
+
+# Basic scraping
+npx --package=@danilidonbeltran/webscrapper webscrapper "https://example.com"
+
+# Structured extraction
+npx --package=@danilidonbeltran/webscrapper webscrapper \
+  "https://example.com" --structured --output results.json
+```
+
+For local development from this repository:
+
 ```bash
 # Install dependencies
 npm install
@@ -25,10 +42,10 @@ npm install
 npm run install-browsers
 
 # Basic scraping
-npm run scrape "https://example.com"
+npm run scrape -- "https://example.com"
 
 # Structured extraction
-npm run scrape "https://example.com" -- --structured --output results.json
+npm run scrape -- "https://example.com" --structured --output results.json
 
 # Run tests
 npm test

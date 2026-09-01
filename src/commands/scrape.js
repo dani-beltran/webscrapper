@@ -1,64 +1,98 @@
-#!/usr/bin/env node
-
-import { WebScraper, RedirectError } from '../scraper.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { BulkScraper } from '../bulk-scraper.js';
 import { ConfigurableScraper } from '../configurable-scraper.js';
-import { resolve } from 'path';
-import { pathToFileURL } from 'url';
+import { RedirectError, WebScraper } from '../scraper.js';
 import { getErrorMessage } from '../utils/get-error-message.js';
 
-main().catch(console.error);
+const DEFAULT_BROWSER = 'chromium';
+const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_BATCH_SIZE = 5;
+const DEFAULT_DELAY = 1000;
+const DEFAULT_FORMAT = 'json';
 
-function showHelp() {
-  console.log(`
-🕷️  Web Scraper CLI
+/**
+ * Run the scrape command using values parsed by Commander.
+ *
+ * Mode selection is kept compatible with the previous CLI: --file takes
+ * precedence, followed by --preset, multiple URLs, and one URL.
+ */
+export async function runScrape(urls = [], options = {}, command) {
+  const groupBy = options.groupBy ?? [];
+  const plugin = options.pluginFile
+    ? await loadPluginFromFile(options.pluginFile)
+    : undefined;
+  const scraperOptions = {
+    browser: options.browser ?? DEFAULT_BROWSER,
+    headless: options.headless !== false,
+    timeout: options.timeout ?? DEFAULT_TIMEOUT,
+    followPermanentRedirect: options.followPermanentRedirect !== false,
+    followTemporaryRedirect: options.followTemporaryRedirect !== false,
+    plugin
+  };
 
-Usage: 
+  if (options.file) {
+    await runBulkScrape({
+      source: { type: 'file', path: options.file },
+      scraperOptions,
+      bulkOptions: createBulkOptions(options, groupBy)
+    });
+    return;
+  }
 
-node src/commands/scrape.js [command] [options] <url(s)>
+  if (options.preset) {
+    if (urls.length === 0) {
+      throw new Error('URL is required when using --preset');
+    }
 
-Options:
-  --structured, -s          - Extract structured content (headings, links, etc.)
-  --browser <type>          - Browser to use: chromium, firefox, webkit (default: chromium)
-  --timeout <ms>            - Timeout in milliseconds (default: 30000)
-  --no-headless             - Run with browser window visible
-  --no-follow-permanent-redirect  - Don't follow permanent redirects (301, 308)
-  --no-follow-temporary-redirect  - Don't follow temporary redirects (302, 303, 307)
-  --output <file>           - Save output to file (JSON format)
-  --file <path>             - Read URLs from file (triggers bulk mode)
-  --help, -h                - Show this help message
-  --preset <name>           - Use configuration preset (triggers config mode)
-  --group-by <selector>     - CSS selector to create structured result groups
-  --plugin-file <path>      - JavaScript module whose default export runs before scraping
+    await runPresetScrape({
+      url: urls[0],
+      preset: options.preset,
+      options,
+      command,
+      groupBy,
+      plugin
+    });
+    return;
+  }
 
+  if (urls.length > 1) {
+    await runBulkScrape({
+      source: { type: 'urls', urls },
+      scraperOptions,
+      bulkOptions: createBulkOptions(options, groupBy)
+    });
+    return;
+  }
 
-Bulk Mode Options (when multiple URLs or --file used):
-  --format <json|txt|csv>   - Output format (default: json)
-  --batch-size <number>     - URLs per batch (default: 5)
-  --delay <ms>              - Delay between batches (default: 1000)
+  if (urls.length === 1) {
+    await runSingleScrape(urls[0], {
+      ...scraperOptions,
+      structured: Boolean(options.structured) || groupBy.length > 0,
+      outputFile: options.output ?? null,
+      groupBy
+    });
+    return;
+  }
 
-Examples:
-  # Single URL scraping
-  node src/commands/scrape.js "https://example.com"
-  node src/commands/scrape.js --structured "https://news-site.com"
-  node src/commands/scrape.js --group-by "article" "https://news-site.com"
-  node src/commands/scrape.js --plugin-file plugin-example.js "https://example.com"
-  
-  # Bulk scraping
-  node src/commands/scrape.js "https://example.com" "https://google.com"
-  node src/commands/scrape.js --file urls.txt --output results.json --structured
-  
-  # Configuration-based scraping
-  node src/commands/scrape.js --preset news "https://news-site.com"
-`);
+  throw new Error('At least one URL is required');
+}
+
+function createBulkOptions(options, groupBy) {
+  return {
+    structured: Boolean(options.structured) || groupBy.length > 0,
+    outputFormat: options.format ?? DEFAULT_FORMAT,
+    batchSize: options.batchSize ?? DEFAULT_BATCH_SIZE,
+    delay: options.delay ?? DEFAULT_DELAY,
+    outputFile: options.output ?? null,
+    groupBy
+  };
 }
 
 async function loadPluginFromFile(filePath) {
-  if (!filePath) {
-    throw new Error('Plugin file path is required');
-  }
-
   let pluginModule;
+
   try {
     pluginModule = await import(pathToFileURL(resolve(filePath)).href);
   } catch (error) {
@@ -81,161 +115,13 @@ function selectorsToGroups(selectors) {
   }));
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    showHelp();
-    process.exit(0);
-  }
-
-  // Automatic mode detection
-  let mode = 'single';
-  let actualArgs = args;
-
-  // Check for file mode
-  if (args.includes('--file')) {
-    mode = 'bulk';
-    const fileIndex = args.indexOf('--file');
-    const filePath = args[fileIndex + 1];
-    const otherArgs = args.filter((arg, i) => 
-      arg !== '--file' && 
-      i !== fileIndex + 1
-    );
-    actualArgs = ['file', filePath, ...otherArgs];
-  }
-  // Check for preset mode
-  else if (args.includes('--preset')) {
-    mode = 'config';
-    const presetIndex = args.indexOf('--preset');
-    const presetName = args[presetIndex + 1];
-    const urls = args.filter(arg => arg.startsWith('http') || arg.startsWith('file://'));
-    if (urls.length === 0) {
-      console.error('❌ Error: URL is required when using --preset');
-      process.exit(1);
-    }
-    // Rearrange args for config mode: ['scrape', url, preset, ...otherArgs]
-    const otherArgs = args.filter((arg, i) => 
-      arg !== '--preset' && 
-      i !== presetIndex + 1 && 
-      !arg.startsWith('http') && 
-      !arg.startsWith('file://')
-    );
-    actualArgs = ['scrape', urls[0], presetName, ...otherArgs];
-  }
-  // Check for multiple URLs (bulk mode)
-  else {
-    const urls = args.filter(arg => arg.startsWith('http') || arg.startsWith('file://'));
-    if (urls.length > 1) {
-      mode = 'bulk';
-      const nonUrlArgs = args.filter(arg => !arg.startsWith('http') && !arg.startsWith('file://'));
-      actualArgs = ['urls', ...urls, ...nonUrlArgs];
-    }
-    // Single URL mode (default)
-    else if (urls.length === 1) {
-      mode = 'single';
-      actualArgs = args;
-    }
-    else {
-      console.error('❌ Error: At least one URL is required');
-      showHelp();
-      process.exit(1);
-    }
-  }
-
-  try {
-    switch (mode) {
-      case 'single':
-        await handleSingleMode(actualArgs);
-        break;
-      case 'bulk':
-        await handleBulkMode(actualArgs);
-        break;
-      case 'config':
-        await handleConfigMode(actualArgs);
-        break;
-      default:
-        console.error(`❌ Unknown mode: ${mode}`);
-        showHelp();
-        process.exit(1);
-    }
-  } catch (error) {
-    console.error(`❌ Error: ${getErrorMessage(error)}`);
-    process.exit(1);
-  }
+function isSupportedSingleUrl(url) {
+  return url.startsWith('http') || url.startsWith('file://');
 }
 
-async function handleSingleMode(args) {
-  let url = null;
-  const options = {
-    browser: 'chromium',
-    headless: true,
-    timeout: 30000,
-    structured: false,
-    outputFile: null,
-    groupBy: [],
-    followPermanentRedirect: true,
-    followTemporaryRedirect: true,
-  };
-
-  // Parse arguments
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    switch (arg) {
-      case '--structured':
-      case '-s':
-        options.structured = true;
-        break;
-      case '--browser':
-        options.browser = args[++i];
-        break;
-      case '--timeout':
-        options.timeout = parseInt(args[++i]);
-        break;
-      case '--no-headless':
-        options.headless = false;
-        break;
-      case '--no-follow-permanent-redirect':
-        options.followPermanentRedirect = false;
-        break;
-      case '--no-follow-temporary-redirect':
-        options.followTemporaryRedirect = false;
-        break;
-      case '--output':
-        options.outputFile = args[++i];
-        break;
-      case '--group-by':
-        options.groupBy.push(args[++i]);
-        options.structured = true; // Auto-enable structured mode when grouping
-        break;
-      case '--plugin-file':
-        options.plugin = await loadPluginFromFile(args[++i]);
-        break;
-      case '--preset':
-        // Skip preset handling in single mode - this should be handled by mode detection
-        i++; // Skip the preset name
-        break;
-      case '--file':
-        // Skip file handling in single mode - this should be handled by mode detection
-        i++; // Skip the file path
-        break;
-      default:
-        if (!arg.startsWith('--') && !url) {
-          url = arg;
-        }
-    }
-  }
-
-  if (!url) {
-    console.error('❌ Error: URL is required');
-    showHelp();
-    process.exit(1);
-  }
-
-  if (!url.startsWith('http') && !url.startsWith('file://')) {
-    console.error('❌ Error: URL must start with http://, https://, or file://');
-    process.exit(1);
+async function runSingleScrape(url, options) {
+  if (!isSupportedSingleUrl(url)) {
+    throw new Error('URL must start with http://, https://, or file://');
   }
 
   console.log(`🚀 Scraping: ${url}`);
@@ -244,12 +130,12 @@ async function handleSingleMode(args) {
     🔄 Follow Permanent Redirects: ${options.followPermanentRedirect}
     🔄 Follow Temporary Redirects: ${options.followTemporaryRedirect}
     ⏰ Timeout: ${options.timeout}ms
-    💾 Output ${options.outputFile ? `file: ${options.outputFile}` : `in console`}
+    💾 Output ${options.outputFile ? `file: ${options.outputFile}` : 'in console'}
     ${options.structured ? '📊 Structured mode enabled' : '📝 Plain text mode'}
     📦 Grouping by selector: ${options.groupBy.join(', ') || 'None'}
     🧩 Pre-scrape plugin: ${options.plugin ? 'Enabled' : 'None'}
   `);
-  
+
   const scraper = new WebScraper({
     browser: options.browser,
     headless: options.headless,
@@ -260,57 +146,58 @@ async function handleSingleMode(args) {
     plugin: options.plugin
   });
 
-  let result;
   try {
-    result = options.structured 
-      ? await scraper.scrapeTextStructured(url)
-      : await scraper.scrapeText(url);
-  } catch (error) {
-    await scraper.close();
-    
-    // Check if it's a redirect error
-    if (error instanceof RedirectError) {
-      console.log('\n🔄 Redirect Detected!');
-      console.log(`   Status: ${error.status}`);
-      console.log(`   Original URL: ${error.originalUrl}`);
-      console.log(`   Redirects to: ${error.location}`);
-      console.log(`   Message: ${getErrorMessage(error)}`);
-      
-      // Save redirect info if output file requested
-      if (options.outputFile) {
-        const fs = await import('fs');
-        const redirectResult = {
-          url: error.originalUrl,
-          redirect: true,
-          status: error.status,
-          location: error.location,
-          message: getErrorMessage(error),
-          timestamp: error.timestamp
-        };
-        fs.writeFileSync(options.outputFile, JSON.stringify(redirectResult, null, 2));
-        console.log(`💾 Redirect info saved to: ${options.outputFile}`);
-      }
-      
-      console.log('\n✅ Redirect detection completed!');
+    let result;
+
+    try {
+      result = options.structured
+        ? await scraper.scrapeTextStructured(url)
+        : await scraper.scrapeText(url);
+    } catch (error) {
+      if (!(error instanceof RedirectError)) throw error;
+      displayRedirect(error, options.outputFile);
       return;
     }
-    
-    // Re-throw if it's not a redirect error
-    throw error;
+
+    displaySingleResult(result, options);
+  } finally {
+    await scraper.close();
+  }
+}
+
+function displayRedirect(error, outputFile) {
+  console.log('\n🔄 Redirect Detected!');
+  console.log(`   Status: ${error.status}`);
+  console.log(`   Original URL: ${error.originalUrl}`);
+  console.log(`   Redirects to: ${error.location}`);
+  console.log(`   Message: ${getErrorMessage(error)}`);
+
+  if (outputFile) {
+    const redirectResult = {
+      url: error.originalUrl,
+      redirect: true,
+      status: error.status,
+      location: error.location,
+      message: getErrorMessage(error),
+      timestamp: error.timestamp
+    };
+    writeFileSync(outputFile, JSON.stringify(redirectResult, null, 2));
+    console.log(`💾 Redirect info saved to: ${outputFile}`);
   }
 
-  await scraper.close();
+  console.log('\n✅ Redirect detection completed!');
+}
 
-  // Display results
+function displaySingleResult(result, options) {
   console.log('\n📊 Results:');
-  
+
   if (options.structured) {
     console.log(`📄 Title: ${result.title || 'N/A'}`);
-    
+
     if (result.groups) {
       console.log(`📦 Groups: ${result.groups.length}`);
-      result.groups.forEach((group, i) => {
-        console.log(`\n  Group ${i + 1} (${group.id}):`);
+      result.groups.forEach((group, index) => {
+        console.log(`\n  Group ${index + 1} (${group.id}):`);
         if (group.title) console.log(`    Title: ${group.title}`);
         console.log(`    Paragraphs: ${group.paragraphs.length}`);
         console.log(`    Links: ${group.links.length}`);
@@ -328,10 +215,8 @@ async function handleSingleMode(args) {
     console.log(`📄 Preview: ${result.text.substring(0, 150)}...`);
   }
 
-  // Save to file if requested
   if (options.outputFile) {
-    const fs = await import('fs');
-    fs.writeFileSync(options.outputFile, JSON.stringify(result, null, 2));
+    writeFileSync(options.outputFile, JSON.stringify(result, null, 2));
     console.log(`💾 Results saved to: ${options.outputFile}`);
   } else {
     console.log('\n📄 Full output:');
@@ -341,116 +226,17 @@ async function handleSingleMode(args) {
   console.log('\n✅ Scraping completed successfully!');
 }
 
-async function handleBulkMode(args) {
-  if (args.length === 0) {
-    console.error('❌ Error: Bulk mode requires "urls" or "file" subcommand');
-    showHelp();
-    process.exit(1);
-  }
-
-  const subMode = args[0];
-  let urls = [];
-  let scraperOptions = {
-    headless: true,
-    browser: 'chromium',
-    timeout: 30000,
-    followPermanentRedirect: true,
-    followTemporaryRedirect: true,
-  };
-  let bulkOptions = {
-    structured: false,
-    outputFormat: 'json',
-    batchSize: 5,
-    delay: 1000,
-    outputFile: null,
-    groupBy: []
-  };
-
-  // Parse arguments
-  for (let i = 1; i < args.length; i++) {
-    switch (args[i]) {
-      case '--output':
-        bulkOptions.outputFile = args[++i];
-        break;
-      case '--format':
-        bulkOptions.outputFormat = args[++i];
-        break;
-      case '--batch-size':
-        bulkOptions.batchSize = parseInt(args[++i]);
-        break;
-      case '--delay':
-        bulkOptions.delay = parseInt(args[++i]);
-        break;
-      case '--browser':
-        scraperOptions.browser = args[++i];
-        break;
-      case '--timeout':
-        scraperOptions.timeout = parseInt(args[++i]);
-        break;
-      case '--structured':
-        bulkOptions.structured = true;
-        break;
-      case '--group-by':
-        bulkOptions.groupBy.push(args[++i]);
-        bulkOptions.structured = true; // Auto-enable structured mode when grouping
-        break;
-      case '--headless':
-        scraperOptions.headless = true;
-        break;
-      case '--no-headless':
-        scraperOptions.headless = false;
-        break;
-      case '--no-follow-permanent-redirect':
-        scraperOptions.followPermanentRedirect = false;
-        break;
-      case '--no-follow-temporary-redirect':
-        scraperOptions.followTemporaryRedirect = false;
-        break;
-      case '--plugin-file':
-        scraperOptions.plugin = await loadPluginFromFile(args[++i]);
-        break;
-      default:
-        if (subMode === 'urls' && !args[i].startsWith('--')) {
-          urls.push(args[i]);
-        }
-    }
-  }
-
-  // Validation
-  if (subMode === 'urls' && urls.length === 0) {
-    console.error('❌ Error: No URLs provided for "urls" mode');
-    showHelp();
-    process.exit(1);
-  }
-
-  if (subMode === 'file' && !args[1]) {
-    console.error('❌ Error: File path required for "file" mode');
-    showHelp();
-    process.exit(1);
-  }
-
-  if (!['urls', 'file'].includes(subMode)) {
-    console.error(`❌ Error: Unknown bulk submode "${subMode}"`);
-    showHelp();
-    process.exit(1);
-  }
-
+async function runBulkScrape({ source, scraperOptions, bulkOptions }) {
   if (!['json', 'txt', 'csv'].includes(bulkOptions.outputFormat)) {
-    console.error(`❌ Error: Unsupported format "${bulkOptions.outputFormat}"`);
-    process.exit(1);
+    throw new Error(`Unsupported format "${bulkOptions.outputFormat}"`);
   }
 
-  // Validate URLs if in URLs mode
-  if (subMode === 'urls') {
-    const invalidUrls = urls.filter(url => !url.startsWith('http'));
-    if (invalidUrls.length > 0) {
-      console.error(`❌ Error: Invalid URLs (must start with http:// or https://): ${invalidUrls.join(', ')}`);
-      process.exit(1);
-    }
-  }
+  const urls = source.type === 'file'
+    ? readUrlsFromFile(source.path)
+    : validateBulkUrls(source.urls);
 
   console.log('🚀 Initializing bulk scraper...');
-  console.log(`🔧 Configuration:`);
+  console.log('🔧 Configuration:');
   console.log(`   Browser: ${scraperOptions.browser}`);
   console.log(`   Headless: ${scraperOptions.headless}`);
   console.log(`   Timeout: ${scraperOptions.timeout}ms`);
@@ -460,266 +246,179 @@ async function handleBulkMode(args) {
   console.log(`   Output format: ${bulkOptions.outputFormat}`);
   if (bulkOptions.groupBy.length > 0) {
     console.log(`   Group by selector: ${bulkOptions.groupBy}`);
-  };
-  
+  }
+
   const bulkScraper = new BulkScraper({
     ...scraperOptions,
     groups: selectorsToGroups(bulkOptions.groupBy)
   });
-  
-  let results;
-  if (subMode === 'file') {
-    const filePath = args[1];
-    console.log(`📁 Reading URLs from file: ${filePath}`);
-    
-    // First, read and validate the file
-    try {
-      const fs = await import('fs');
-      const fileContent = fs.readFileSync(filePath, 'utf-8');
-      const fileUrls = fileContent
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line && line.startsWith('http'));
-      
-      if (fileUrls.length === 0) {
-        throw new Error('No valid URLs found in file');
-      }
-      
-      console.log(`📋 Found ${fileUrls.length} valid URLs in file`);
-      results = await bulkScraper.scrapeUrls(fileUrls, bulkOptions);
-    } catch (fileError) {
-      throw new Error(`Failed to read file "${filePath}": ${getErrorMessage(fileError)}`);
+
+  try {
+    if (source.type === 'file') {
+      console.log(`📁 Reading URLs from file: ${source.path}`);
+      console.log(`📋 Found ${urls.length} valid URLs in file`);
+    } else {
+      console.log(`📋 Scraping ${urls.length} provided URLs`);
     }
-  } else if (subMode === 'urls') {
-    console.log(`📋 Scraping ${urls.length} provided URLs`);
-    results = await bulkScraper.scrapeUrls(urls, bulkOptions);
+
+    const results = await bulkScraper.scrapeUrls(urls, bulkOptions);
+    displayBulkResult(results, bulkOptions.outputFile);
+  } finally {
+    await bulkScraper.close();
   }
-  
-  console.log(`\n🎉 Bulk scraping completed!`);
-  console.log(`📊 Statistics:`);
+}
+
+function readUrlsFromFile(filePath) {
+  let fileContent;
+
+  try {
+    fileContent = readFileSync(filePath, 'utf8');
+  } catch (error) {
+    throw new Error(`Failed to read file "${filePath}": ${getErrorMessage(error)}`);
+  }
+
+  const urls = fileContent
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && line.startsWith('http'));
+
+  if (urls.length === 0) {
+    throw new Error(`Failed to read file "${filePath}": No valid URLs found in file`);
+  }
+
+  return urls;
+}
+
+function validateBulkUrls(urls) {
+  const invalidUrls = urls.filter(url => !url.startsWith('http'));
+
+  if (invalidUrls.length > 0) {
+    throw new Error(`Invalid URLs (must start with http:// or https://): ${invalidUrls.join(', ')}`);
+  }
+
+  return urls;
+}
+
+function displayBulkResult(results, outputFile) {
+  const successful = results.filter(result => !result.error).length;
+
+  console.log('\n🎉 Bulk scraping completed!');
+  console.log('📊 Statistics:');
   console.log(`   Total URLs: ${results.length}`);
-  console.log(`   Successful: ${results.filter(r => !r.error).length}`);
-  console.log(`   Failed: ${results.filter(r => r.error).length}`);
-  console.log(`   Success rate: ${((results.filter(r => !r.error).length / results.length) * 100).toFixed(1)}%`);
-  
-  if (!bulkOptions.outputFile) {
-    console.log('\n📋 Results summary:');
-    results.forEach((result, index) => {
-      const status = result.error ? '❌ Error' : '✅ Success';
-      const length = result.error ? '' : ` (${result.length || result.text?.length || 0} chars)`;
-      console.log(`${index + 1}. ${result.url} - ${status}${length}`);
-      if (result.error) {
-        console.log(`   └─ ${result.error}`);
-      }
-    });
-    
-    console.log('\n💡 Tip: Use --output <filename> to save results to a file');
-  }
-  
-  await bulkScraper.close();
+  console.log(`   Successful: ${successful}`);
+  console.log(`   Failed: ${results.length - successful}`);
+  console.log(`   Success rate: ${((successful / results.length) * 100).toFixed(1)}%`);
+
+  if (outputFile) return;
+
+  console.log('\n📋 Results summary:');
+  results.forEach((result, index) => {
+    const status = result.error ? '❌ Error' : '✅ Success';
+    const length = result.error ? '' : ` (${result.length || result.text?.length || 0} chars)`;
+    console.log(`${index + 1}. ${result.url} - ${status}${length}`);
+    if (result.error) console.log(`   └─ ${result.error}`);
+  });
+
+  console.log('\n💡 Tip: Use --output <filename> to save results to a file');
 }
 
-async function handleConfigMode(args) {
-  if (args.length === 0) {
-    console.error('❌ Error: Config mode requires a command');
-    showHelp();
-    process.exit(1);
+async function runPresetScrape({ url, preset, options, command, groupBy, plugin }) {
+  if (!isSupportedSingleUrl(url)) {
+    throw new Error('URL must start with http://, https://, or file://');
   }
 
-  const command = args[0];
-
-  switch (command) {
-    case 'scrape':
-      await handleConfigScrapeCommand(args.slice(1));
-      break;
-
-    default:
-      console.error(`❌ Unknown config command: ${command}`);
-      showHelp();
-      process.exit(1);
-  }
-}
-
-async function handleConfigScrapeCommand(args) {
-  if (args.length === 0) {
-    console.error('❌ Please specify a URL to scrape');
-    console.log('\n💡 Usage: node src/scrape.js config scrape <url> [preset] [options]');
-    process.exit(1);
+  const presets = ConfigurableScraper.listPresets();
+  if (!presets.includes(preset)) {
+    throw new Error(
+      `Unknown preset: ${preset}\n\nAvailable presets:\n${presets.map(name => `   - ${name}`).join('\n')}`
+    );
   }
 
-  const url = args[0];
-  let preset = null;
-  let options = {
-    outputFile: null,
-    format: 'full', // Always use full format
-    customOptions: {},
-    groupBy: []
-  };
-
-  // Parse arguments
-  for (let i = 1; i < args.length; i++) {
-    const arg = args[i];
-    
-    switch (arg) {
-      case '--output':
-        options.outputFile = args[++i];
-        break;
-      case '--browser':
-        options.customOptions.browser = args[++i];
-        break;
-      case '--timeout':
-        options.customOptions.timeout = parseInt(args[++i]);
-        break;
-      case '--headless':
-        options.customOptions.headless = true;
-        break;
-      case '--no-headless':
-        options.customOptions.headless = false;
-        break;
-      case '--no-follow-permanent-redirect':
-        options.customOptions.followPermanentRedirect = false;
-        break;
-      case '--no-follow-temporary-redirect':
-        options.customOptions.followTemporaryRedirect = false;
-        break;
-      case '--group-by':
-        options.groupBy.push(args[++i]);
-        break;
-      case '--plugin-file':
-        options.customOptions.plugin = await loadPluginFromFile(args[++i]);
-        break;
-      default:
-        if (!arg.startsWith('--') && preset === null) {
-          // First non-option argument after URL is the preset
-          preset = arg;
-        }
-    }
-  }
-
-  // Validate URL
-  if (!url.startsWith('http') && !url.startsWith('file://')) {
-    console.error('❌ URL must start with http://, https://, or file://');
-    process.exit(1);
-  }
-
-  // Validate preset if provided
-  if (preset && !ConfigurableScraper.listPresets().includes(preset)) {
-    console.error(`❌ Unknown preset: ${preset}`);
-    console.log('\n💡 Available presets:');
-    ConfigurableScraper.listPresets().forEach(p => {
-      console.log(`   - ${p}`);
-    });
-    process.exit(1);
-  }
+  const customOptions = {};
+  copyExplicitOption(customOptions, 'browser', options, command);
+  copyExplicitOption(customOptions, 'timeout', options, command);
+  copyExplicitOption(customOptions, 'headless', options, command);
+  copyExplicitOption(customOptions, 'followPermanentRedirect', options, command);
+  copyExplicitOption(customOptions, 'followTemporaryRedirect', options, command);
+  if (plugin) customOptions.plugin = plugin;
 
   console.log(`🚀 Scraping: ${url}`);
-  if (preset) {
-    console.log(`🎨 Using preset: ${preset}`);
+  console.log(`🎨 Using preset: ${preset}`);
+  if (Object.keys(customOptions).length > 0) {
+    const printableOptions = { ...customOptions };
+    if (printableOptions.plugin) printableOptions.plugin = '[Function]';
+    console.log(`🔧 Custom options: ${JSON.stringify(printableOptions)}`);
   }
-  if (Object.keys(options.customOptions).length > 0) {
-    console.log(`🔧 Custom options: ${JSON.stringify(options.customOptions)}`);
-  }
-  if (options.groupBy.length > 0) {
-    console.log(`📦 Grouping by selector: ${options.groupBy}`);
-  }
+  if (groupBy.length > 0) console.log(`📦 Grouping by selector: ${groupBy}`);
 
   const scraper = new ConfigurableScraper(preset, {
-    groups: selectorsToGroups(options.groupBy),
-    ...options.customOptions
+    groups: selectorsToGroups(groupBy),
+    ...customOptions
   });
-  const result = await scraper.scrapeTextStructured(url);
-  
-  // Display results based on format
-  switch (options.format) {
-    case 'summary':
-      console.log('\n📊 Results Summary:');
-      console.log(`📄 Title: ${result.title || 'N/A'}`);
-      
-      if (result.groups) {
-        console.log(`� Groups: ${result.groups.length}`);
-        const totalParagraphs = result.groups.reduce((sum, group) => sum + group.paragraphs.length, 0);
-        const totalLinks = result.groups.reduce((sum, group) => sum + group.links.length, 0);
-        const totalHeadings = result.groups.reduce((sum, group) => sum + Object.values(group.headings).flat().length, 0);
-        const totalLists = result.groups.reduce((sum, group) => sum + group.lists.length, 0);
-        
-        console.log(`�📝 Total paragraphs: ${totalParagraphs}`);
-        console.log(`🔗 Total links: ${totalLinks}`);
-        console.log(`📑 Total headings: ${totalHeadings}`);
-        console.log(`📋 Total lists: ${totalLists}`);
-      } else {
-        console.log(`📝 Text length: ${result.paragraphs.join(' ').length} characters`);
-        console.log(`📑 Headings: ${Object.values(result.headings).flat().length}`);
-        console.log(`🔗 Links: ${result.links.length}`);
-        console.log(`📋 Lists: ${result.lists.length}`);
-      }
-      
-      if (result.headings?.h1 && result.headings.h1.length > 0) {
-        console.log(`\n🏷️  Main headings:`);
-        result.headings.h1.forEach(h => console.log(`   - ${h}`));
-      }
-      break;
-      
-    case 'full':
-      console.log('\n📊 Detailed Results:');
-      console.log(`📄 Title: ${result.title || 'N/A'}`);
-      console.log(`🌐 URL: ${result.url}`);
-      
-      if (result.groups) {
-        console.log(`\n📦 Groups (${result.groups.length}):`);
-        result.groups.forEach((group, i) => {
-          console.log(`\n  Group ${i + 1} (${group.id}):`);
-          if (group.title) {
-            console.log(`    Title: ${group.title}`);
-          }
-          console.log(`    Paragraphs: ${group.paragraphs.length}`);
-          console.log(`    Links: ${group.links.length}`);
-          console.log(`    Headings: ${Object.values(group.headings).flat().length}`);
-          console.log(`    Lists: ${group.lists.length}`);
-          
-          if (group.paragraphs.length > 0) {
-            console.log(`\n    First paragraph:`);
-            console.log(`    ${group.paragraphs[0].substring(0, 100)}...`);
-          }
-        });
-      } else {
-        console.log(`📝 Paragraphs (${result.paragraphs.length}):`);
-        result.paragraphs.slice(0, 3).forEach((p, i) => {
-          console.log(`   ${i + 1}. ${p.substring(0, 100)}${p.length > 100 ? '...' : ''}`);
-        });
-        if (result.paragraphs.length > 3) {
-          console.log(`   ... and ${result.paragraphs.length - 3} more`);
-        }
-        
-        console.log(`\n📑 All headings:`);
-        Object.entries(result.headings).forEach(([tag, headings]) => {
-          if (headings.length > 0) {
-            console.log(`   ${tag.toUpperCase()}: ${headings.join(', ')}`);
-          }
-        });
-        
-        console.log(`\n🔗 Links (${result.links.length}):`);
-        result.links.slice(0, 5).forEach((link, i) => {
-          console.log(`   ${i + 1}. ${link.text} → ${link.href}`);
-        });
-        if (result.links.length > 5) {
-          console.log(`   ... and ${result.links.length - 5} more`);
-        }
-      }
-      break;
-      
-    case 'json':
-      console.log('\n📄 Full JSON output:');
-      console.log(JSON.stringify(result, null, 2));
-      break;
+
+  try {
+    const result = await scraper.scrapeTextStructured(url);
+    displayPresetResult(result);
+
+    if (options.output) {
+      writeFileSync(options.output, JSON.stringify(result, null, 2));
+      console.log(`\n💾 Results saved to: ${options.output}`);
+    }
+
+    console.log('\n✅ Scraping completed successfully!');
+  } finally {
+    await scraper.close();
   }
-  
-  // Save to file if requested
-  if (options.outputFile) {
-    const fs = await import('fs');
-    fs.writeFileSync(options.outputFile, JSON.stringify(result, null, 2));
-    console.log(`\n💾 Results saved to: ${options.outputFile}`);
+}
+
+function copyExplicitOption(target, name, options, command) {
+  const isExplicit = command
+    ? command.getOptionValueSource(name) === 'cli'
+    : options[name] !== undefined;
+
+  if (isExplicit) target[name] = options[name];
+}
+
+function displayPresetResult(result) {
+  console.log('\n📊 Detailed Results:');
+  console.log(`📄 Title: ${result.title || 'N/A'}`);
+  console.log(`🌐 URL: ${result.url}`);
+
+  if (result.groups) {
+    console.log(`\n📦 Groups (${result.groups.length}):`);
+    result.groups.forEach((group, index) => {
+      console.log(`\n  Group ${index + 1} (${group.id}):`);
+      if (group.title) console.log(`    Title: ${group.title}`);
+      console.log(`    Paragraphs: ${group.paragraphs.length}`);
+      console.log(`    Links: ${group.links.length}`);
+      console.log(`    Headings: ${Object.values(group.headings).flat().length}`);
+      console.log(`    Lists: ${group.lists.length}`);
+
+      if (group.paragraphs.length > 0) {
+        console.log('\n    First paragraph:');
+        console.log(`    ${group.paragraphs[0].substring(0, 100)}...`);
+      }
+    });
+    return;
   }
-  
-  await scraper.close();
-  console.log('\n✅ Scraping completed successfully!');
+
+  console.log(`📝 Paragraphs (${result.paragraphs.length}):`);
+  result.paragraphs.slice(0, 3).forEach((paragraph, index) => {
+    const suffix = paragraph.length > 100 ? '...' : '';
+    console.log(`   ${index + 1}. ${paragraph.substring(0, 100)}${suffix}`);
+  });
+  if (result.paragraphs.length > 3) {
+    console.log(`   ... and ${result.paragraphs.length - 3} more`);
+  }
+
+  console.log('\n📑 All headings:');
+  Object.entries(result.headings).forEach(([tag, headings]) => {
+    if (headings.length > 0) console.log(`   ${tag.toUpperCase()}: ${headings.join(', ')}`);
+  });
+
+  console.log(`\n🔗 Links (${result.links.length}):`);
+  result.links.slice(0, 5).forEach((link, index) => {
+    console.log(`   ${index + 1}. ${link.text} → ${link.href}`);
+  });
+  if (result.links.length > 5) console.log(`   ... and ${result.links.length - 5} more`);
 }
